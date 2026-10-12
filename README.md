@@ -1,0 +1,180 @@
+# pvngu/laravel-chat
+
+Slack-style chat for any Laravel app: direct messages, group conversations and channels, replies, forwards, edits,
+reactions, pins, attachments, unread counts and real-time updates. It's the backend for
+[`@pvngu/vue-chat`](https://github.com/Pvngu/vue-chat): the API returns exactly the shapes the Vue components use, so
+the frontend needs no mapping.
+
+- **Secure by default.** Policies on every endpoint: only members see or post in a chat, only senders edit their
+  messages, admins remove people. Other people's conversations answer 404, so ids can't be probed.
+- **Fits your app.** One class says how your users are identified (database ids, hashed ids, UUIDs), named, shown
+  and scoped to a tenant (e.g. a company).
+- **Real-time.** Events broadcast on private channels through Reverb, Pusher or Ably; vue-chat's `connectEcho()`
+  wires them into the UI.
+- **Built for chat.** Read state is one "last read message" per person, not one row per message per reader; a direct
+  conversation between two people exists once; attachments live on any Laravel disk and are served through
+  expiring links.
+
+Requires PHP 8.2+ and Laravel 12 or 13.
+
+## Install
+
+```bash
+composer require pvngu/laravel-chat
+php artisan chat:install     # publishes config/laravel-chat.php and the migration
+php artisan migrate
+```
+
+Check `config/laravel-chat.php` before migrating:
+
+- `routes.middleware`: `['api', 'auth:sanctum']` by default. For a same-origin SPA with session login, `['web', 'auth']`
+  also works.
+- `user_key_type`: `'uuid'`, `'ulid'` or `'string'` if your users table key isn't a big integer.
+- `user_attributes`: which attributes hold the name, email and avatar, and `tenant` (e.g. `'company_id'`) for
+  multi-tenant apps: people only see conversations and other people with the same value.
+- `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments` and
+  `chat_reactions`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
+  are installed.
+
+### Frontend
+
+```bash
+npm install @pvngu/vue-chat
+```
+
+```vue
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+import { ChatLayout, connectEcho, createLaravelAdapter, useChatStore } from '@pvngu/vue-chat'
+
+const chat = useChatStore({
+  adapter: createLaravelAdapter({ socketId: () => window.Echo?.socketId() }),
+  currentUser: { id: user.id, name: user.name }, // id as the API exposes it (see "Your users")
+})
+
+onMounted(chat.init)
+const disconnect = connectEcho(window.Echo, chat) // optional: real-time updates
+onUnmounted(disconnect)
+</script>
+
+<template>
+  <ChatLayout v-bind="chat.bindings" sidebar-variant="sections" />
+</template>
+```
+
+`createLaravelAdapter()` calls `/api/chat` with `fetch`, sends Sanctum's XSRF cookie back, and accepts
+`baseUrl`, `headers` (e.g. a bearer token) and `credentials` options. For Sanctum's cookie-based SPA authentication,
+call `/sanctum/csrf-cookie` once before the first request.
+
+## Your users
+
+The default provider reads `config('laravel-chat.user_attributes')`. When your app needs more, extend it and point
+`user_provider` at your class:
+
+```php
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Pvngu\Chat\Users\DefaultChatUserProvider;
+
+class ChatUsers extends DefaultChatUserProvider
+{
+    // Expose hashed ids instead of database keys
+    public function publicId(Model $user): string
+    {
+        return $user->xid;
+    }
+
+    public function find(string $publicId): ?Model
+    {
+        return User::query()->find(Hashids::decode($publicId)[0] ?? null);
+    }
+
+    // Only staff of the same company can be messaged
+    public function available(Model $user): Collection
+    {
+        return User::query()
+            ->where('company_id', $user->getRawOriginal('company_id'))
+            ->where('user_type', 'staff_members')
+            ->whereKeyNot($user->getKey())
+            ->orderBy('name')
+            ->get();
+    }
+}
+```
+
+The methods are `publicId()`, `find()`, `present()` (name, email, avatar), `tenant()` and `available()`; see
+`Pvngu\Chat\Contracts\ChatUserProvider`.
+
+## Using it from code
+
+The `Chat` facade does everything the API does, without permission checks:
+
+```php
+use Pvngu\Chat\Facades\Chat;
+
+$conversation = Chat::direct($user, $otherUser);            // the existing one, or a new one
+$group = Chat::group($user, [$ann, $john], 'Launch');
+$channel = Chat::channel($user, 'announcements');
+
+Chat::send($channel, $bot, 'Deploy finished ✅');            // also accepts UploadedFile[] attachments
+Chat::addParticipant($channel, $newHire);
+```
+
+## Events and real-time
+
+`MessageSent`, `MessageUpdated` (edits, reactions, pins), `MessageDeleted` and `ConversationJoined` are ordinary
+Laravel events, so you can listen to them (e.g. to email people who are offline). They wait for the database commit,
+and when `broadcasting.enabled` is on they're broadcast too:
+
+| Channel | Events |
+| --- | --- |
+| `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted` |
+| `private-chat.user.{publicId}` | `.conversation.joined` |
+
+The package registers who may listen (members of the conversation, anyone in the tenant for a public channel, and
+each person on their own user channel). Your app needs broadcasting set up (`php artisan install:broadcasting`) so the
+channel authorization route exists. Pass Echo's socket id to the adapter (as above) so your own changes aren't echoed
+back to you.
+
+## Changing the rules
+
+Register your own policies for `Pvngu\Chat\Models\Conversation` (`view`, `send`, `participate`, `addMembers`,
+`removeMember`) or `Pvngu\Chat\Models\Message` (`update`, `delete`, `react`, `pin`). App service providers boot after
+packages, so yours replace the defaults.
+
+## API
+
+All under `/api/chat` (configurable). Lists are Laravel resource collections; paginated ones have `links.next`.
+`{kind}` is `conversations` or `channels`.
+
+| Method | Path | |
+| --- | --- | --- |
+| GET | `conversations?page=` | Your direct and group conversations, latest activity first |
+| POST | `conversations` | `{ participantIds, isDirect, name? }`; returns the existing direct message when there is one |
+| POST | `conversations/{id}/pin`, `/archive` | `{ pinned }`, `{ archived }` |
+| GET / POST | `channels` | Your channels plus the public ones; create `{ name, isPrivate, description? }` |
+| GET | `{kind}/{id}` | One conversation or channel |
+| GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
+| POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]? }` (multipart with files) |
+| POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |
+| POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave |
+| PATCH / DELETE | `messages/{id}` | Edit `{ body }`; delete |
+| POST / DELETE | `messages/{id}/reactions`, `/reactions/{emoji}` | `{ emoji }` |
+| POST | `messages/{id}/pin` | `{ pinned }` |
+| GET | `users` | People you can start a conversation with |
+
+Errors are Laravel's usual JSON: 422 with `errors` for validation, 403 or 404 for permissions.
+
+## Development
+
+```bash
+composer install
+composer test      # PHPUnit on Orchestra Testbench, SQLite in memory
+composer lint      # Pint
+```
+
+CI runs the tests on PHP 8.2–8.4 with Laravel 12 and 13, at the lowest and latest dependency versions.
+
+## License
+
+MIT
