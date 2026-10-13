@@ -42,6 +42,7 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
             Route::post("$kind/{conversation}/notifications", [ConversationController::class, 'notifications'])->name("$kind.notifications");
             Route::get("$kind/{conversation}/messages", [MessageController::class, 'index'])->name("$kind.messages.index");
             Route::post("$kind/{conversation}/messages", [MessageController::class, 'store'])->name("$kind.messages.store");
+            Route::get("$kind/{conversation}/files", [AttachmentController::class, 'index'])->name("$kind.files.index");
             Route::post("$kind/{conversation}/read", [ConversationController::class, 'read'])->name("$kind.read");
             Route::post("$kind/{conversation}/favorite", [ConversationController::class, 'favorite'])->name("$kind.favorite");
             Route::post("$kind/{conversation}/members", [MemberController::class, 'store'])->name("$kind.members.store");

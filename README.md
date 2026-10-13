@@ -245,6 +245,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST | `{kind}/{id}/notifications` | `{ level: 'all' \| 'mentions' \| 'none', mutedUntil? }` |
 | GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
 | POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]?, gif? }` (multipart with files) |
+| GET | `{kind}/{id}/files?type=&before=` | Its files, newest first: `media` (photos and videos) or `files`; `before` is the last id shown |
 | POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |
 | POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave `{ successorId? }` |
 | PATCH | `{kind}/{id}/members/{userId}` | Admins: `{ role: 'admin' \| 'member' }` |

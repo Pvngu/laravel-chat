@@ -41,6 +41,7 @@ return [
     'pagination' => [
         'conversations' => 30,
         'messages' => 50,
+        'files' => 30,              // a chat's Files tab
     ],
 
     'attachments' => [

@@ -31,6 +31,9 @@ First version.
   and only admins add people to a private channel. The creator always stays an admin that others can't remove or
   demote. The last admin leaving hands over to the member they choose
   (`successorId`) or the longest-standing one. Role changes are membership lines (`promoted`, `demoted`).
+- Files: `GET {kind}/{id}/files` lists a chat's photos and videos (`type=media`) or other files (`type=files`),
+  newest first, with who sent each one, when, and its message, for vue-chat's Files tab
+  (`laravel-chat.pagination.files`).
 - Settings: admins change a channel's name, description and privacy, or a group's name (`PATCH {kind}/{id}`,
   `Chat::update()`); conversations and channels show `isAdmin`, `createdAt` and `createdBy`.
 - Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`, `ConversationUpdated`) broadcast
