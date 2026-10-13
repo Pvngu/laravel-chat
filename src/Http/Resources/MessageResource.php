@@ -46,11 +46,25 @@ class MessageResource extends JsonResource
                 'url' => $attachment->url(),
                 'isImage' => $attachment->isImage(),
             ])->values(),
+            'gif' => $this->gif ? [
+                'provider' => (string) ($this->gif['provider'] ?? ''),
+                'id' => (string) ($this->gif['id'] ?? ''),
+                'title' => (string) ($this->gif['title'] ?? ''),
+                'width' => (int) ($this->gif['width'] ?? 0),
+                'height' => (int) ($this->gif['height'] ?? 0),
+                'video' => $this->gif['video'] ?? null,
+                'image' => (string) ($this->gif['image'] ?? ''),
+                'still' => (string) ($this->gif['still'] ?? ''),
+            ] : null,
             'replyTo' => $replyTo ? [
                 'messageId' => (string) $replyTo->id,
                 'senderName' => $this->person($replyTo->sender, $replyTo->sender_id)['name'],
                 // A deleted original's text isn't repeated in replies
-                'text' => $replyTo->trashed() ? '' : $replyTo->body,
+                'text' => match (true) {
+                    $replyTo->trashed() => '',
+                    $replyTo->body === '' && $replyTo->gif !== null => 'GIF',
+                    default => $replyTo->body,
+                },
             ] : null,
         ];
     }

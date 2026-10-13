@@ -50,6 +50,7 @@ return new class extends Migration
             $table->foreignId('conversation_id')->constrained($prefix.'conversations')->cascadeOnDelete();
             $this->userColumn($table, 'sender_id')->nullable();
             $table->text('body');
+            $table->json('gif')->nullable(); // provider, id, title, width, height, video, image, still
             $table->foreignId('reply_to_id')->nullable()->constrained($prefix.'messages')->nullOnDelete();
             $table->unsignedBigInteger('forwarded_from_id')->nullable();
             $table->timestamp('edited_at')->nullable();

@@ -50,6 +50,12 @@ return [
         'url_ttl_minutes' => 60,    // signed links (or temporary URLs on disks that support them, like S3)
     ],
 
+    'gifs' => [
+        // GIF messages can only point at media on these hosts, over HTTPS. The defaults are KLIPY's media servers, for
+        // vue-chat's createKlipyGifs(); an empty list turns GIF messages off.
+        'media_hosts' => ['static.klipy.com', 'static1.klipy.com', 'static2.klipy.com'],
+    ],
+
     'broadcasting' => [
         'enabled' => true,
         'channel_prefix' => 'chat',  // private channels: chat.conversation.{id} and chat.user.{userId}

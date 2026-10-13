@@ -120,6 +120,16 @@ Chat::send($channel, $bot, 'Deploy finished ✅');            // also accepts Up
 Chat::addParticipant($channel, $newHire);
 ```
 
+## GIFs
+
+Messages can carry a GIF picked in vue-chat's GIF picker (`createKlipyGifs()`). The API accepts `gif` (`provider`,
+`id`, `title`, `width`, `height`, `video`, `image`, `still`) and returns it on the message. GIFs are stored as their
+provider's URLs, and browsers load them from the provider, as KLIPY requires.
+
+Only HTTPS URLs on `gifs.media_hosts` are accepted (KLIPY's media servers by default), so messages can't embed images
+from anywhere else; an empty list turns GIF messages off. Forwarding a message brings its GIF along, and previews and
+reply quotes call it "GIF". From code: `Chat::send($conversation, $user, '', gif: [...])`.
+
 ## Events and real-time
 
 `MessageSent`, `MessageUpdated` (edits, reactions, pins), `MessageDeleted` and `ConversationJoined` are ordinary
@@ -155,7 +165,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | GET / POST | `channels` | Your channels plus the public ones; create `{ name, isPrivate, description? }` |
 | GET | `{kind}/{id}` | One conversation or channel |
 | GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
-| POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]? }` (multipart with files) |
+| POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]?, gif? }` (multipart with files) |
 | POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |
 | POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave |
 | PATCH / DELETE | `messages/{id}` | Edit `{ body }`; delete |

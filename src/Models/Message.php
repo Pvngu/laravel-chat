@@ -30,6 +30,7 @@ class Message extends ChatModel
         return [
             'edited_at' => 'datetime',
             'pinned_at' => 'datetime',
+            'gif' => 'array',
         ];
     }
 
@@ -64,6 +65,9 @@ class Message extends ChatModel
     {
         if ($this->body !== '') {
             return $this->body;
+        }
+        if ($this->gif) {
+            return 'GIF';
         }
 
         return $this->attachments->map(fn (Attachment $a) => "📎 {$a->name}")->implode(', ');

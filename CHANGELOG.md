@@ -14,6 +14,7 @@ First version.
 - JSON API in `@pvngu/vue-chat`'s shapes, with policies on every endpoint and 404s for chats you can't see.
 - `ChatUserProvider` for apps with hashed ids, UUID keys, custom names and avatars, and multi-tenancy.
 - `Chat` facade for sending messages and creating conversations from code.
+- GIF messages (`gif` on messages), accepted only from the configured media hosts (KLIPY's by default).
 - Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`) broadcast on private channels, with
   channel authorization.
 - `chat:install` command.

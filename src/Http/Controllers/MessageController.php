@@ -48,14 +48,15 @@ class MessageController extends Controller
             }
         }
 
-        $message = $this->chat->send(
-            $conversation,
-            $request->user(),
-            (string) $request->input('body', ''),
-            $request->file('attachments', []),
-            $replyTo,
-            $forwardedFrom,
-        );
+        // A forwarded GIF comes along with its message
+        $gif = $request->validated('gif') ?? $forwardedFrom?->gif;
+        $body = (string) $request->input('body', '');
+        $files = $request->file('attachments', []);
+        if ($body === '' && $files === [] && $gif === null) {
+            throw ValidationException::withMessages(['body' => 'The message is empty.']);
+        }
+
+        $message = $this->chat->send($conversation, $request->user(), $body, $files, $replyTo, $forwardedFrom, $gif);
 
         return (new MessageResource($message->load(Message::presentationRelations())))->response()->setStatusCode(201);
     }

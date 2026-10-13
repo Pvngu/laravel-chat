@@ -146,19 +146,21 @@ class ChatManager
         array $files = [],
         ?Message $replyTo = null,
         ?Message $forwardedFrom = null,
+        ?array $gif = null, // see MessageResource for the shape; the request validates where its media comes from
     ): Message {
         $disk = config('laravel-chat.attachments.disk') ?? config('filesystems.default');
         $directory = trim((string) config('laravel-chat.attachments.directory', 'chat-attachments'), '/');
         $stored = [];
 
         try {
-            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $disk, $directory, &$stored) {
+            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $disk, $directory, &$stored) {
                 $participant = $this->addParticipant($conversation, $sender, notify: false);
 
                 /** @var Message $message */
                 $message = $conversation->messages()->create([
                     'sender_id' => $sender->getKey(),
                     'body' => $body,
+                    'gif' => $gif,
                     'reply_to_id' => $replyTo?->id,
                     'forwarded_from_id' => $forwardedFrom?->id,
                 ]);

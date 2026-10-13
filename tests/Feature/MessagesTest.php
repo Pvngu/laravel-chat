@@ -56,6 +56,7 @@ class MessagesTest extends TestCase
             'isPinned' => false,
             'reactions' => [],
             'attachments' => [],
+            'gif' => null,
             'replyTo' => null,
         ]);
         $this->assertNull($page2->json('links.next'));
@@ -125,6 +126,67 @@ class MessagesTest extends TestCase
         $this->actingAs($this->ann)->getJson($this->messagesUrl())
             ->assertJsonPath('data.0.attachments.0.url', fn (string $url) => ! str_contains($url, '/api/chat/attachments/'));
         Storage::disk('local')->assertExists($message->attachments()->first()->path);
+    }
+
+    public function test_gifs_only_come_from_the_providers_media_hosts(): void
+    {
+        $this->actingAs($this->ann)
+            ->postJson($this->messagesUrl(), ['gif' => $this->gif()])
+            ->assertCreated()
+            ->assertJsonPath('data.text', '')
+            ->assertJsonPath('data.gif', $this->gif());
+
+        $unsafe = ['https://evil.example/a.webp', 'http://static.klipy.com/a.webp', 'https://static.klipy.com@evil.example/a.webp', 'javascript:alert(1)'];
+        foreach ($unsafe as $url) {
+            $this->actingAs($this->ann)
+                ->postJson($this->messagesUrl(), ['gif' => $this->gif(['image' => $url])])
+                ->assertJsonValidationErrors('gif.image');
+        }
+
+        // No hosts, no GIFs
+        config(['laravel-chat.gifs.media_hosts' => []]);
+        $this->actingAs($this->ann)
+            ->postJson($this->messagesUrl(), ['gif' => $this->gif()])
+            ->assertJsonValidationErrors(['gif.image', 'gif.still', 'gif.video']);
+    }
+
+    public function test_gifs_are_named_in_previews_and_replies_and_forwarded_with_their_message(): void
+    {
+        $gifMessage = Chat::send($this->conversation, $this->john, '', gif: $this->gif());
+        $this->actingAs($this->ann)->getJson('/api/chat/conversations')->assertJsonPath('data.0.lastMessage.text', 'GIF');
+        $this->actingAs($this->ann)
+            ->postJson($this->messagesUrl(), ['body' => 'Ha', 'replyToId' => (string) $gifMessage->id])
+            ->assertJsonPath('data.replyTo.text', 'GIF');
+
+        // vue-chat forwards a message's text, which a GIF doesn't have
+        $elsewhere = $this->directBetween($this->ann, $this->person('Sara Lane'));
+        $this->actingAs($this->ann)
+            ->postJson("/api/chat/conversations/{$elsewhere->id}/messages", ['body' => '', 'forwardedFromId' => (string) $gifMessage->id])
+            ->assertCreated()
+            ->assertJsonPath('data.isForwarded', true)
+            ->assertJsonPath('data.gif.id', 'hello-hi-662');
+
+        // Something must still be sent
+        $plain = Chat::send($this->conversation, $this->john, 'Text only');
+        $this->actingAs($this->ann)
+            ->postJson("/api/chat/conversations/{$elsewhere->id}/messages", ['body' => '', 'forwardedFromId' => (string) $plain->id])
+            ->assertJsonValidationErrors('body');
+    }
+
+    /** @return array<string, mixed> */
+    private function gif(array $overrides = []): array
+    {
+        return [
+            'provider' => 'klipy',
+            'id' => 'hello-hi-662',
+            'title' => 'Hello',
+            'width' => 498,
+            'height' => 280,
+            'video' => 'https://static.klipy.com/ii/935d7ab9/md.mp4',
+            'image' => 'https://static.klipy.com/ii/935d7ab9/md.webp',
+            'still' => 'https://static1.klipy.com/ii/935d7ab9/md.jpg',
+            ...$overrides,
+        ];
     }
 
     public function test_it_validates_messages(): void
