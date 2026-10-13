@@ -29,6 +29,12 @@ class ChannelsTest extends TestCase
             'unreadCount' => 0,
             'isMember' => true,
             'isFavorite' => false,
+            'notifications' => 'all',
+            'mutedUntil' => null,
+            'mentionCount' => 0,
+            'isAdmin' => true,
+            'createdAt' => $design->created_at->toIso8601ZuluString(),
+            'createdBy' => ['id' => (string) $ann->id, 'name' => 'Ann Smith', 'email' => 'ann.smith@example.com', 'avatarUrl' => null],
         ]);
         // Not a member yet: nothing counts as unread
         $response->assertJsonPath('data.1.isMember', false)->assertJsonPath('data.1.unreadCount', 0);

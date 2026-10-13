@@ -34,6 +34,8 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         // Conversations and channels share these: the frontend addresses a chat as {kind}s/{id}
         foreach (['conversations', 'channels'] as $kind) {
             Route::get("$kind/{conversation}", [ConversationController::class, 'show'])->name("$kind.show");
+            Route::patch("$kind/{conversation}", [ConversationController::class, 'update'])->name("$kind.update");
+            Route::post("$kind/{conversation}/notifications", [ConversationController::class, 'notifications'])->name("$kind.notifications");
             Route::get("$kind/{conversation}/messages", [MessageController::class, 'index'])->name("$kind.messages.index");
             Route::post("$kind/{conversation}/messages", [MessageController::class, 'store'])->name("$kind.messages.store");
             Route::post("$kind/{conversation}/read", [ConversationController::class, 'read'])->name("$kind.read");

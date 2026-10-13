@@ -39,6 +39,20 @@ class ConversationPolicy
         return $this->member($user, $conversation) ? Response::allow() : Response::denyAsNotFound();
     }
 
+    // Name, description, privacy: the conversation's admins (a direct message has nothing to change)
+    public function update(Model $user, Conversation $conversation): Response
+    {
+        $participant = $this->member($user, $conversation);
+        if (! $participant) {
+            return Response::denyAsNotFound();
+        }
+        if ($conversation->isDirect()) {
+            return Response::deny('A direct message has no settings to change.');
+        }
+
+        return $participant->isAdmin() ? Response::allow() : Response::deny('Only admins can change these settings.');
+    }
+
     public function addMembers(Model $user, Conversation $conversation): Response
     {
         if (! $this->member($user, $conversation)) {

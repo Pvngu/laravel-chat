@@ -4,6 +4,7 @@ namespace Pvngu\Chat\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Pvngu\Chat\Http\Resources\Concerns\PresentsChatDetails;
 use Pvngu\Chat\Http\Resources\Concerns\PresentsPeople;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Models\Participant;
@@ -16,7 +17,7 @@ use Pvngu\Chat\Models\Participant;
  */
 class ConversationResource extends JsonResource
 {
-    use PresentsPeople;
+    use PresentsChatDetails, PresentsPeople;
 
     public function toArray(Request $request): array
     {
@@ -39,6 +40,7 @@ class ConversationResource extends JsonResource
             'unreadCount' => (int) ($this->unread_count ?? 0),
             'isPinned' => $this->viewer_pinned_at !== null,
             'isFavorite' => $this->viewer_favorited_at !== null,
+            ...$this->chatDetails(),
         ];
     }
 }

@@ -39,6 +39,8 @@ return new class extends Migration
             $table->timestamp('pinned_at')->nullable();
             $table->timestamp('favorited_at')->nullable();
             $table->timestamp('archived_at')->nullable();
+            $table->string('notifications', 16)->default('all'); // all | mentions | none
+            $table->timestamp('muted_until')->nullable(); // notifications paused until then
             $table->timestamps();
 
             $table->unique(['conversation_id', 'user_id']);
@@ -81,12 +83,24 @@ return new class extends Migration
 
             $table->unique(['message_id', 'user_id', 'emoji']);
         });
+
+        // Who a message mentions (`<@id>` in its text): unread mention counts and notifications
+        Schema::create($prefix.'mentions', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->foreignId('message_id')->constrained($prefix.'messages')->cascadeOnDelete();
+            $table->foreignId('conversation_id')->constrained($prefix.'conversations')->cascadeOnDelete();
+            $this->userColumn($table, 'user_id');
+
+            $table->unique(['message_id', 'user_id']);
+            $table->index(['user_id', 'conversation_id', 'message_id']);
+        });
     }
 
     public function down(): void
     {
         $prefix = config('laravel-chat.table_prefix', 'chat_');
 
+        Schema::dropIfExists($prefix.'mentions');
         Schema::dropIfExists($prefix.'reactions');
         Schema::dropIfExists($prefix.'attachments');
         Schema::dropIfExists($prefix.'messages');

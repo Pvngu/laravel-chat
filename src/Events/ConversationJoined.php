@@ -35,7 +35,7 @@ class ConversationJoined extends ChatEvent
         // Rendered as the joining user sees it (their unread count, the other person in a direct message)
         $conversation = Conversation::query()
             ->withViewerState($this->user)
-            ->with(['participants.user', 'latestMessage.sender', 'latestMessage.attachments'])
+            ->with(Conversation::presentationRelations())
             ->findOrFail($this->conversation->id);
 
         $resource = $conversation->isChannel()

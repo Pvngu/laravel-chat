@@ -20,7 +20,7 @@ abstract class Controller
     {
         return Conversation::query()
             ->withViewerState($user)
-            ->with(['participants.user', 'latestMessage.sender', 'latestMessage.attachments'])
+            ->with(Conversation::presentationRelations())
             ->findOrFail($conversationId);
     }
 

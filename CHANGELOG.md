@@ -15,7 +15,13 @@ First version.
 - `ChatUserProvider` for apps with hashed ids, UUID keys, custom names and avatars, and multi-tenancy.
 - `Chat` facade for sending messages and creating conversations from code.
 - GIF messages (`gif` on messages), accepted only from the configured media hosts (KLIPY's by default).
-- Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`) broadcast on private channels, with
-  channel authorization.
+- Mentions (`<@publicId>` in the text): recorded per message, returned as `mentions`, counted unread per chat
+  (`mentionCount`) and shown by name in previews and reply quotes.
+- Notification settings per person and chat (all, mentions, none, and a temporary mute), with `Chat::recipients()`
+  for apps that send push or email notifications.
+- Settings: admins change a channel's name, description and privacy, or a group's name (`PATCH {kind}/{id}`,
+  `Chat::update()`); conversations and channels show `isAdmin`, `createdAt` and `createdBy`.
+- Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`, `ConversationUpdated`) broadcast
+  on private channels, with channel authorization.
 - `chat:install` command.
 - Tests on Orchestra Testbench; CI on PHP 8.2–8.4 with Laravel 12 and 13.

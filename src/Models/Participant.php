@@ -24,6 +24,7 @@ class Participant extends ChatModel
             'pinned_at' => 'datetime',
             'favorited_at' => 'datetime',
             'archived_at' => 'datetime',
+            'muted_until' => 'datetime',
         ];
     }
 
@@ -40,5 +41,21 @@ class Participant extends ChatModel
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    // Notifications are off, for good or for now
+    public function isMuted(): bool
+    {
+        return $this->notifications === 'none' || ($this->muted_until !== null && $this->muted_until->isFuture());
+    }
+
+    // Whether this person wants to hear about a new message (that mentions them or not)
+    public function wantsNotification(bool $isMentioned): bool
+    {
+        if ($this->isMuted()) {
+            return false;
+        }
+
+        return $this->notifications === 'all' || ($this->notifications === 'mentions' && $isMentioned);
     }
 }

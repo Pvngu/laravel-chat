@@ -5,8 +5,11 @@ namespace Pvngu\Chat\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Pvngu\Chat\Http\Requests\NotificationsRequest;
 use Pvngu\Chat\Http\Requests\StoreConversationRequest;
+use Pvngu\Chat\Http\Requests\UpdateConversationRequest;
 use Pvngu\Chat\Http\Resources\ChannelResource;
 use Pvngu\Chat\Http\Resources\ConversationResource;
 use Pvngu\Chat\Models\Conversation;
@@ -22,7 +25,7 @@ class ConversationController extends Controller
         $conversations = Conversation::query()
             ->conversationsOf($user, $this->users->tenant($user))
             ->whereNull('viewer.archived_at')
-            ->with(['participants.user', 'latestMessage.sender', 'latestMessage.attachments'])
+            ->with(Conversation::presentationRelations())
             ->orderByRaw("coalesce($table.last_message_at, $table.created_at) desc")
             ->orderByDesc("$table.id")
             ->simplePaginate((int) config('laravel-chat.pagination.conversations', 30))
@@ -69,6 +72,28 @@ class ConversationController extends Controller
     public function archive(Request $request, Conversation $conversation): Response
     {
         return $this->flag($request, $conversation, 'archived', $request->boolean('archived', true));
+    }
+
+    public function update(UpdateConversationRequest $request, Conversation $conversation): ConversationResource|ChannelResource
+    {
+        Gate::authorize('update', $conversation);
+        $this->chat->update($conversation, $request->validated());
+
+        return $this->show($request, $conversation);
+    }
+
+    public function notifications(NotificationsRequest $request, Conversation $conversation): Response
+    {
+        Gate::authorize('participate', $conversation);
+        $mutedUntil = $request->validated('mutedUntil');
+        $this->chat->setNotifications(
+            $conversation,
+            $request->user(),
+            $request->validated('level'),
+            $mutedUntil ? Carbon::parse($mutedUntil) : null,
+        );
+
+        return response()->noContent();
     }
 
     public function show(Request $request, Conversation $conversation): ConversationResource|ChannelResource

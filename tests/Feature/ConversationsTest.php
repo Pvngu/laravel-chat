@@ -48,6 +48,12 @@ class ConversationsTest extends TestCase
             'unreadCount' => 2,
             'isPinned' => false,
             'isFavorite' => false,
+            'notifications' => 'all',
+            'mutedUntil' => null,
+            'mentionCount' => 0,
+            'isAdmin' => true,
+            'createdAt' => '2026-03-10T09:00:00Z',
+            'createdBy' => ['id' => (string) $ann->id, 'name' => 'Ann Smith', 'email' => 'ann.smith@example.com', 'avatarUrl' => null],
         ]);
         $response->assertJsonPath('data.0.title', 'Design Team');
         $response->assertJsonPath('data.0.unreadCount', 0); // her own message

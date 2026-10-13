@@ -18,7 +18,7 @@ class ChannelController extends Controller
 
         $channels = Conversation::query()
             ->channelsVisibleTo($user, $this->users->tenant($user))
-            ->with('participants.user')
+            ->with(['participants.user', 'creator'])
             ->orderBy("$table.name")
             ->get();
 

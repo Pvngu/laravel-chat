@@ -2,13 +2,16 @@
 
 namespace Pvngu\Chat;
 
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Events\ConversationJoined;
+use Pvngu\Chat\Events\ConversationUpdated;
 use Pvngu\Chat\Events\MessageDeleted;
 use Pvngu\Chat\Events\MessageSent;
 use Pvngu\Chat\Events\MessageUpdated;
@@ -165,6 +168,8 @@ class ChatManager
                     'forwarded_from_id' => $forwardedFrom?->id,
                 ]);
 
+                $this->syncMentions($message);
+
                 foreach ($files as $file) {
                     $path = $file->store("$directory/{$conversation->id}", $disk);
                     if ($path === false) {
@@ -202,6 +207,7 @@ class ChatManager
     public function edit(Message $message, string $body): Message
     {
         $message->forceFill(['body' => $body, 'edited_at' => now()])->save();
+        $this->syncMentions($message);
         MessageUpdated::dispatch($message);
 
         return $message;
@@ -246,6 +252,57 @@ class ChatManager
             ->update(['last_read_message_id' => $conversation->messages()->max('id')]);
     }
 
+    /**
+     * Change a conversation's or channel's details: `name`, `description`, and for channels `isPrivate`.
+     *
+     * @param  array{name?: ?string, description?: ?string, isPrivate?: bool}  $changes
+     */
+    public function update(Conversation $conversation, array $changes): Conversation
+    {
+        $attributes = array_filter([
+            'name' => array_key_exists('name', $changes) ? $changes['name'] : false,
+            'description' => array_key_exists('description', $changes) ? $changes['description'] : false,
+            'is_private' => $conversation->isChannel() && array_key_exists('isPrivate', $changes) ? (bool) $changes['isPrivate'] : false,
+        ], fn ($value) => $value !== false);
+
+        $conversation->fill($attributes);
+        if ($conversation->isDirty()) {
+            $conversation->save();
+            ConversationUpdated::dispatch($conversation);
+        }
+
+        return $conversation;
+    }
+
+    /**
+     * How a person hears about new messages in a conversation: 'all', 'mentions' or 'none', and optionally nothing
+     * at all until a time (a temporary mute).
+     */
+    public function setNotifications(Conversation $conversation, Model $user, string $level, ?DateTimeInterface $mutedUntil = null): void
+    {
+        $conversation->participants()
+            ->where('user_id', $user->getKey())
+            ->update(['notifications' => $level, 'muted_until' => $mutedUntil]);
+    }
+
+    /**
+     * The people to notify about a message (by push, email, …): its conversation's members except the sender, as
+     * their notification settings ask. Use it from a MessageSent listener.
+     *
+     * @return Collection<int, Model>
+     */
+    public function recipients(Message $message): Collection
+    {
+        $mentioned = $message->mentions()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
+
+        return $message->conversation->participants()->with('user')->get()
+            ->filter(fn (Participant $participant) => (string) $participant->user_id !== (string) $message->sender_id)
+            ->filter(fn (Participant $participant) => $participant->wantsNotification(in_array((string) $participant->user_id, $mentioned, true)))
+            ->map(fn (Participant $participant) => $participant->user)
+            ->filter()
+            ->values();
+    }
+
     /** @param  'pinned'|'favorited'|'archived'  $flag */
     public function setFlag(Conversation $conversation, Model $user, string $flag, bool $on): void
     {
@@ -260,5 +317,22 @@ class ChatManager
         MessageUpdated::dispatch($message);
 
         return $message;
+    }
+
+    // Record who the text mentions with `<@id>`: people in the conversation's tenant (up to 50 per message)
+    private function syncMentions(Message $message): void
+    {
+        preg_match_all(Message::MENTION_PATTERN, $message->body, $matches);
+        $tenant = $message->conversation()->value('tenant');
+        $people = collect(array_slice(array_unique($matches[1]), 0, 50))
+            ->map(fn (string $publicId) => $this->users->find($publicId))
+            ->filter(fn (?Model $user) => $user !== null && $this->users->tenant($user) === $tenant)
+            ->unique(fn (Model $user) => (string) $user->getKey());
+
+        $message->mentions()->delete();
+        foreach ($people as $person) {
+            $message->mentions()->create(['conversation_id' => $message->conversation_id, 'user_id' => $person->getKey()]);
+        }
+        $message->unsetRelation('mentions');
     }
 }

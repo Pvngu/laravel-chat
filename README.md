@@ -118,7 +118,37 @@ $channel = Chat::channel($user, 'announcements');
 
 Chat::send($channel, $bot, 'Deploy finished ✅');            // also accepts UploadedFile[] attachments
 Chat::addParticipant($channel, $newHire);
+Chat::update($channel, ['description' => 'Company news']);   // name, description, isPrivate (channels)
+Chat::setNotifications($channel, $user, 'mentions');         // 'all' | 'mentions' | 'none', optional mute end
 ```
+
+## Mentions and notifications
+
+A mention is `<@publicId>` in a message's text (the id your `ChatUserProvider` gives the person), which vue-chat's
+message box writes when someone picks a name after `@`. The package records who each message mentions (people in the
+same tenant), returns them as `mentions: [{ id, name }]`, counts unread ones per chat (`mentionCount`), and shows them
+as "@Name" in previews and reply quotes.
+
+Each person chooses how they hear about a chat: every message (`all`, the default), only mentions (`mentions`), or
+nothing (`none`), plus an optional `mutedUntil` to pause it for a while. The package doesn't send notifications
+itself; when you do (push, email), ask it who wants one:
+
+```php
+use Pvngu\Chat\Events\MessageSent;
+
+Event::listen(function (MessageSent $event) {
+    Notification::send(Chat::recipients($event->message), new NewChatMessage($event->message));
+});
+```
+
+`Chat::recipients($message)` is everyone in the chat but the sender, minus people who muted it or follow only
+mentions and weren't mentioned.
+
+## Settings
+
+Admins of a channel (its creator, and anyone you make `admin`) can change its name, description and privacy; a
+group's admins can rename it. Everyone sees `isAdmin`, `createdAt` and `createdBy` on conversations and channels.
+Direct messages have no settings. Changes are broadcast as `.conversation.updated`.
 
 ## GIFs
 
@@ -132,13 +162,14 @@ reply quotes call it "GIF". From code: `Chat::send($conversation, $user, '', gif
 
 ## Events and real-time
 
-`MessageSent`, `MessageUpdated` (edits, reactions, pins), `MessageDeleted` and `ConversationJoined` are ordinary
+`MessageSent`, `MessageUpdated` (edits, reactions, pins), `MessageDeleted`, `ConversationJoined` and
+`ConversationUpdated` (settings) are ordinary
 Laravel events, so you can listen to them (e.g. to email people who are offline). They wait for the database commit,
 and when `broadcasting.enabled` is on they're broadcast too:
 
 | Channel | Events |
 | --- | --- |
-| `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted` |
+| `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted`, `.conversation.updated` |
 | `private-chat.user.{publicId}` | `.conversation.joined` |
 
 The package registers who may listen (members of the conversation, anyone in the tenant for a public channel, and
@@ -149,7 +180,7 @@ back to you.
 ## Changing the rules
 
 Register your own policies for `Pvngu\Chat\Models\Conversation` (`view`, `send`, `participate`, `addMembers`,
-`removeMember`) or `Pvngu\Chat\Models\Message` (`update`, `delete`, `react`, `pin`). App service providers boot after
+`removeMember`, `update`) or `Pvngu\Chat\Models\Message` (`update`, `delete`, `react`, `pin`). App service providers boot after
 packages, so yours replace the defaults.
 
 ## API
@@ -164,6 +195,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST | `conversations/{id}/pin`, `/archive` | `{ pinned }`, `{ archived }` |
 | GET / POST | `channels` | Your channels plus the public ones; create `{ name, isPrivate, description? }` |
 | GET | `{kind}/{id}` | One conversation or channel |
+| PATCH | `{kind}/{id}` | Admins: `{ name?, description?, isPrivate? }` (description and privacy for channels) |
+| POST | `{kind}/{id}/notifications` | `{ level: 'all' \| 'mentions' \| 'none', mutedUntil? }` |
 | GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
 | POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]?, gif? }` (multipart with files) |
 | POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |

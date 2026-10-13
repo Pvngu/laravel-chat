@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Support\ChatConfig;
 
 /**
@@ -50,6 +51,11 @@ class Message extends ChatModel
         return $this->belongsTo(self::class, 'reply_to_id')->withTrashed();
     }
 
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(Mention::class);
+    }
+
     public function attachments(): HasMany
     {
         return $this->hasMany(Attachment::class);
@@ -61,10 +67,31 @@ class Message extends ChatModel
     }
 
     // What the sidebar shows for this message
+    // A mention in a message's text: `<@id>`, with the person's public id (ChatUserProvider::publicId)
+    public const MENTION_PATTERN = '/<@([^<>\s]{1,191})>/';
+
+    // The text as people read it, with mentions as "@Name" (from the loaded mentions)
+    public function displayText(): string
+    {
+        if (! str_contains($this->body, '<@')) {
+            return $this->body;
+        }
+        $users = app(ChatUserProvider::class);
+        $names = $this->mentions
+            ->filter(fn (Mention $mention) => $mention->user !== null)
+            ->mapWithKeys(fn (Mention $mention) => [$users->publicId($mention->user) => $users->present($mention->user)['name']]);
+
+        return (string) preg_replace_callback(
+            self::MENTION_PATTERN,
+            fn (array $match) => '@'.($names[$match[1]] ?? 'unknown'),
+            $this->body,
+        );
+    }
+
     public function previewText(): string
     {
         if ($this->body !== '') {
-            return $this->body;
+            return $this->displayText();
         }
         if ($this->gif) {
             return 'GIF';
@@ -76,6 +103,6 @@ class Message extends ChatModel
     // Relations a MessageResource reads
     public static function presentationRelations(): array
     {
-        return ['sender', 'replyTo.sender', 'attachments', 'reactions.user'];
+        return ['sender', 'replyTo.sender', 'replyTo.mentions.user', 'attachments', 'reactions.user', 'mentions.user'];
     }
 }

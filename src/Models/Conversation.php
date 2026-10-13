@@ -4,6 +4,7 @@ namespace Pvngu\Chat\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -47,9 +48,20 @@ class Conversation extends ChatModel
         return $this->hasMany(Message::class);
     }
 
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(ChatConfig::userModel(), 'created_by');
+    }
+
     public function latestMessage(): HasOne
     {
         return $this->hasOne(Message::class)->latestOfMany();
+    }
+
+    // Relations a ConversationResource reads
+    public static function presentationRelations(): array
+    {
+        return ['participants.user', 'creator', 'latestMessage.sender', 'latestMessage.attachments', 'latestMessage.mentions.user'];
     }
 
     public function isDirect(): bool
@@ -85,6 +97,7 @@ class Conversation extends ChatModel
         $conversations = $this->getTable();
         $participants = ChatConfig::table('participants');
         $messages = ChatConfig::table('messages');
+        $mentions = ChatConfig::table('mentions');
         $userKey = $user->getKey();
 
         $query
@@ -98,6 +111,8 @@ class Conversation extends ChatModel
                 'viewer.pinned_at as viewer_pinned_at',
                 'viewer.favorited_at as viewer_favorited_at',
                 'viewer.archived_at as viewer_archived_at',
+                'viewer.notifications as viewer_notifications',
+                'viewer.muted_until as viewer_muted_until',
             ])
             ->selectSub(function (QueryBuilder $unread) use ($messages, $conversations, $userKey) {
                 $unread->from($messages)
@@ -107,7 +122,19 @@ class Conversation extends ChatModel
                     ->whereRaw("$messages.id > coalesce(viewer.last_read_message_id, 0)")
                     ->whereNull("$messages.deleted_at")
                     ->where(fn ($q) => $q->whereNull("$messages.sender_id")->orWhere("$messages.sender_id", '!=', $userKey));
-            }, 'unread_count');
+            }, 'unread_count')
+            // Unread messages that mention the viewer (someone else's)
+            ->selectSub(function (QueryBuilder $mentioned) use ($mentions, $messages, $conversations, $userKey) {
+                $mentioned->from($mentions)
+                    ->join($messages, "$messages.id", '=', "$mentions.message_id")
+                    ->selectRaw('count(*)')
+                    ->whereColumn("$mentions.conversation_id", "$conversations.id")
+                    ->where("$mentions.user_id", '=', $userKey)
+                    ->whereNotNull('viewer.id')
+                    ->whereRaw("$mentions.message_id > coalesce(viewer.last_read_message_id, 0)")
+                    ->whereNull("$messages.deleted_at")
+                    ->where(fn ($q) => $q->whereNull("$messages.sender_id")->orWhere("$messages.sender_id", '!=', $userKey));
+            }, 'mention_count');
     }
 
     // Conversations (not channels) $user takes part in

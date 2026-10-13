@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Pvngu\Chat\Http\Resources\Concerns\PresentsPeople;
 use Pvngu\Chat\Models\Attachment;
+use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Reaction;
 
@@ -56,6 +57,13 @@ class MessageResource extends JsonResource
                 'image' => (string) ($this->gif['image'] ?? ''),
                 'still' => (string) ($this->gif['still'] ?? ''),
             ] : null,
+            // People mentioned with `<@id>` in the text, so it can show their current names
+            'mentions' => $this->mentions
+                ->map(fn (Mention $mention) => [
+                    'id' => $this->personId($mention->user, $mention->user_id),
+                    'name' => $this->person($mention->user, $mention->user_id)['name'],
+                ])
+                ->values(),
             'replyTo' => $replyTo ? [
                 'messageId' => (string) $replyTo->id,
                 'senderName' => $this->person($replyTo->sender, $replyTo->sender_id)['name'],
@@ -63,7 +71,7 @@ class MessageResource extends JsonResource
                 'text' => match (true) {
                     $replyTo->trashed() => '',
                     $replyTo->body === '' && $replyTo->gif !== null => 'GIF',
-                    default => $replyTo->body,
+                    default => $replyTo->displayText(),
                 },
             ] : null,
         ];

@@ -57,6 +57,7 @@ class MessagesTest extends TestCase
             'reactions' => [],
             'attachments' => [],
             'gif' => null,
+            'mentions' => [],
             'replyTo' => null,
         ]);
         $this->assertNull($page2->json('links.next'));
