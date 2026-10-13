@@ -25,7 +25,7 @@ class ChannelsTest extends TestCase
             'name' => 'design',
             'isPrivate' => true,
             'description' => null,
-            'members' => [['id' => (string) $ann->id, 'name' => 'Ann Smith', 'email' => 'ann.smith@example.com', 'avatarUrl' => null]],
+            'members' => [['id' => (string) $ann->id, 'name' => 'Ann Smith', 'email' => 'ann.smith@example.com', 'avatarUrl' => null, 'role' => 'admin']],
             'unreadCount' => 0,
             'isMember' => true,
             'isFavorite' => false,
@@ -85,9 +85,10 @@ class ChannelsTest extends TestCase
         $channel = Chat::channel($ann, 'design', isPrivate: true); // Ann is the admin
         Chat::addParticipant($channel, $john);
 
-        // Any member can add someone from the same tenant
-        $this->actingAs($john)->postJson("/api/chat/channels/{$channel->id}/members", ['userId' => (string) $sara->id])->assertNoContent();
-        $this->actingAs($john)->postJson("/api/chat/channels/{$channel->id}/members", ['userId' => (string) $this->person('Olga', 'globex')->id])
+        // In a private channel only admins add people, from the same tenant
+        $this->actingAs($john)->postJson("/api/chat/channels/{$channel->id}/members", ['userId' => (string) $sara->id])->assertForbidden();
+        $this->actingAs($ann)->postJson("/api/chat/channels/{$channel->id}/members", ['userId' => (string) $sara->id])->assertNoContent();
+        $this->actingAs($ann)->postJson("/api/chat/channels/{$channel->id}/members", ['userId' => (string) $this->person('Olga', 'globex')->id])
             ->assertJsonValidationErrors('userId');
 
         // Only admins remove others

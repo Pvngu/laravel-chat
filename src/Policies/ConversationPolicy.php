@@ -53,18 +53,43 @@ class ConversationPolicy
         return $participant->isAdmin() ? Response::allow() : Response::deny('Only admins can change these settings.');
     }
 
+    // Members add people; in a private channel only its admins do
     public function addMembers(Model $user, Conversation $conversation): Response
     {
-        if (! $this->member($user, $conversation)) {
+        $participant = $this->member($user, $conversation);
+        if (! $participant) {
             return Response::denyAsNotFound();
         }
+        if ($conversation->isDirect()) {
+            return Response::deny('People can\'t be added to a direct message; start a group instead.');
+        }
+        if ($conversation->isChannel() && $conversation->is_private && ! $participant->isAdmin()) {
+            return Response::deny('Only admins can add people to a private channel.');
+        }
 
-        return $conversation->isDirect()
-            ? Response::deny('People can\'t be added to a direct message; start a group instead.')
+        return Response::allow();
+    }
+
+    // Making people admins, or members again: the admins of a group or channel. The creator always stays an admin.
+    public function manageRoles(Model $user, Conversation $conversation, ?Model $member = null): Response
+    {
+        $participant = $this->member($user, $conversation);
+        if (! $participant) {
+            return Response::denyAsNotFound();
+        }
+        if ($conversation->isDirect()) {
+            return Response::deny('A direct message has no admins.');
+        }
+        if (! $participant->isAdmin()) {
+            return Response::deny('Only admins can change who is an admin.');
+        }
+
+        return $member !== null && $conversation->isCreator($member)
+            ? Response::deny('The creator always stays an admin.')
             : Response::allow();
     }
 
-    // Leaving is always allowed; removing someone else takes an admin
+    // Leaving is always allowed; removing someone else takes an admin, and nobody removes the creator
     public function removeMember(Model $user, Conversation $conversation, Model $member): Response
     {
         $participant = $this->member($user, $conversation);
@@ -74,11 +99,14 @@ class ConversationPolicy
         if ($conversation->isDirect()) {
             return Response::deny('Nobody can leave or be removed from a direct message.');
         }
-        if ((string) $member->getKey() === (string) $user->getKey() || $participant->isAdmin()) {
+        if ((string) $member->getKey() === (string) $user->getKey()) {
             return Response::allow();
         }
+        if ($conversation->isCreator($member)) {
+            return Response::deny('The creator can\'t be removed.');
+        }
 
-        return Response::deny('Only admins can remove other people.');
+        return $participant->isAdmin() ? Response::allow() : Response::deny('Only admins can remove other people.');
     }
 
     private function member(Model $user, Conversation $conversation)

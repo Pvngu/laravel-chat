@@ -72,7 +72,7 @@ class ChatManager
                     'direct_key' => $directKey,
                     'created_by' => $user->getKey(),
                 ]);
-                $this->addParticipant($conversation, $user, 'admin', notify: false);
+                $this->addParticipant($conversation, $user, Participant::ADMIN, notify: false);
                 $this->addParticipant($conversation, $other);
 
                 return $conversation;
@@ -94,7 +94,7 @@ class ChatManager
                 'tenant' => $this->users->tenant($creator),
                 'created_by' => $creator->getKey(),
             ]);
-            $this->addParticipant($conversation, $creator, 'admin', notify: false);
+            $this->addParticipant($conversation, $creator, Participant::ADMIN, notify: false);
             foreach ($members as $member) {
                 $this->addParticipant($conversation, $member);
             }
@@ -114,7 +114,7 @@ class ChatManager
                 'tenant' => $this->users->tenant($creator),
                 'created_by' => $creator->getKey(),
             ]);
-            $this->addParticipant($conversation, $creator, 'admin', notify: false);
+            $this->addParticipant($conversation, $creator, Participant::ADMIN, notify: false);
 
             return $conversation;
         });
@@ -128,6 +128,10 @@ class ChatManager
      */
     public function addParticipant(Conversation $conversation, Model $user, string $role = 'member', bool $notify = true): Participant
     {
+        // The creator coming back is an admin again
+        if ($conversation->isCreator($user)) {
+            $role = Participant::ADMIN;
+        }
         $participant = Participant::query()->firstOrCreate(
             ['conversation_id' => $conversation->id, 'user_id' => $user->getKey()],
             ['role' => $role, 'last_read_message_id' => $conversation->messages()->max('id')],
@@ -167,15 +171,57 @@ class ChatManager
      * Takes someone out of a group or channel and says so in the chat: "left" when they leave ($by is them or null),
      * otherwise "$by removed them". Nothing happens when they aren't in.
      */
-    public function removeMember(Conversation $conversation, Model $user, ?Model $by = null): void
+    public function removeMember(Conversation $conversation, Model $user, ?Model $by = null, ?Model $successor = null): void
     {
-        if (! $conversation->participants()->where('user_id', $user->getKey())->exists()) {
+        $participant = $conversation->participants()->where('user_id', $user->getKey())->first();
+        if ($participant === null) {
             return;
+        }
+
+        // The last admin going: someone else takes over, the one they chose or whoever has been in it longest
+        $others = $conversation->participants()->where('user_id', '!=', $user->getKey());
+        if ($participant->isAdmin() && ! (clone $others)->where('role', Participant::ADMIN)->exists()) {
+            $next = $successor ? (clone $others)->where('user_id', $successor->getKey())->first() : null;
+            $next ??= (clone $others)->with('user')->first();
+            if ($next !== null) {
+                $next->forceFill(['role' => Participant::ADMIN])->save();
+                if ($next->user) {
+                    $this->recordMembership($conversation, $user, Message::EVENT_PROMOTED, $next->user);
+                }
+            }
         }
 
         $left = $by === null || $by->is($user);
         $this->recordMembership($conversation, $by ?? $user, $left ? Message::EVENT_LEFT : Message::EVENT_REMOVED, $user);
         $this->removeParticipant($conversation, $user);
+    }
+
+    /**
+     * Makes someone in a group or channel an admin, or a member again, and says so in the chat. A chat keeps at least
+     * one admin: demoting the last one does nothing (the API refuses it).
+     */
+    public function setRole(Conversation $conversation, Model $user, string $role, ?Model $by = null): void
+    {
+        $participant = $conversation->participants()->where('user_id', $user->getKey())->first();
+        if ($participant === null || $participant->role === $role) {
+            return;
+        }
+        if ($role !== Participant::ADMIN && $this->isLastAdmin($conversation, $user)) {
+            return;
+        }
+
+        $participant->forceFill(['role' => $role])->save();
+        $conversation->unsetRelation('participants');
+        $event = $role === Participant::ADMIN ? Message::EVENT_PROMOTED : Message::EVENT_DEMOTED;
+        $this->recordMembership($conversation, $by ?? $user, $event, $user);
+    }
+
+    // Whether $user is the only admin left
+    public function isLastAdmin(Conversation $conversation, Model $user): bool
+    {
+        $admins = $conversation->participants()->where('role', Participant::ADMIN)->pluck('user_id');
+
+        return $admins->count() === 1 && (string) $admins->first() === (string) $user->getKey();
     }
 
     // ── Messages ────────────────────────────────────────────────────────────

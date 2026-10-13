@@ -41,9 +41,13 @@ class Participant extends ChatModel
         return $this->belongsTo(ChatConfig::userModel(), 'user_id');
     }
 
+    public const ADMIN = 'admin';
+
+    public const MEMBER = 'member';
+
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->role === self::ADMIN;
     }
 
     // Notifications are off, for good or for now

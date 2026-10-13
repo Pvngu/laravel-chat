@@ -15,7 +15,7 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property int $conversation_id
  * @property int|string|null $sender_id
  * @property string $body
- * @property string|null $event joined, left, added or removed: a membership change shown in the chat
+ * @property string|null $event joined, left, added, removed, promoted or demoted: a membership change shown in the chat
  * @property int|string|null $event_user_id who it happened to
  * @property int|null $reply_to_id
  * @property int|null $forwarded_from_id
@@ -52,6 +52,11 @@ class Message extends ChatModel
     public const EVENT_ADDED = 'added';
 
     public const EVENT_REMOVED = 'removed';
+
+    // The sender made someone (event_user_id) an admin, or a member again
+    public const EVENT_PROMOTED = 'promoted';
+
+    public const EVENT_DEMOTED = 'demoted';
 
     public function isEvent(): bool
     {

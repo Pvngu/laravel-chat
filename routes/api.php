@@ -46,6 +46,7 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
             Route::post("$kind/{conversation}/favorite", [ConversationController::class, 'favorite'])->name("$kind.favorite");
             Route::post("$kind/{conversation}/members", [MemberController::class, 'store'])->name("$kind.members.store");
             Route::delete("$kind/{conversation}/members/me", [MemberController::class, 'leave'])->name("$kind.members.leave");
+            Route::patch("$kind/{conversation}/members/{userId}", [MemberController::class, 'update'])->name("$kind.members.update");
             Route::delete("$kind/{conversation}/members/{userId}", [MemberController::class, 'destroy'])->name("$kind.members.destroy");
         }
 

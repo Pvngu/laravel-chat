@@ -29,8 +29,12 @@ class ConversationResource extends JsonResource
             'isPrivate' => $this->is_private,
             'title' => $this->isDirect() ? null : $this->name,
             'description' => $this->description,
+            // With their role in a group (admins manage it); a direct message has none
             'participants' => $this->participants
-                ->map(fn (Participant $participant) => $this->person($participant->user, $participant->user_id))
+                ->map(fn (Participant $participant) => [
+                    ...$this->person($participant->user, $participant->user_id),
+                    ...($this->isDirect() ? [] : ['role' => $participant->role]),
+                ])
                 ->values(),
             'lastMessage' => $latest ? [
                 'text' => $latest->previewText(),

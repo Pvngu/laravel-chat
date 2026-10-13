@@ -26,6 +26,11 @@ First version.
   use their own.
 - Notification settings per person and chat (all, mentions, none, and a temporary mute), with `Chat::recipients()`
   for apps that send push or email notifications.
+- Admins and members: each member's `role` in responses; admins make people admins or members again
+  (`PATCH {kind}/{id}/members/{userId}`, `Chat::setRole()`, the `manageRoles` policy), a chat always keeps an admin,
+  and only admins add people to a private channel. The creator always stays an admin that others can't remove or
+  demote. The last admin leaving hands over to the member they choose
+  (`successorId`) or the longest-standing one. Role changes are membership lines (`promoted`, `demoted`).
 - Settings: admins change a channel's name, description and privacy, or a group's name (`PATCH {kind}/{id}`,
   `Chat::update()`); conversations and channels show `isAdmin`, `createdAt` and `createdBy`.
 - Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`, `ConversationUpdated`) broadcast

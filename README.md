@@ -177,11 +177,23 @@ is who it happened to) and empty text. These lines don't count as unread, aren't
 `Chat::removeMember()` (with an optional `by:`) do the same; `addParticipant()` and `removeParticipant()` stay silent,
 e.g. for seeding or creating a group.
 
-## Settings
+## Admins and settings
 
-Admins of a channel (its creator, and anyone you make `admin`) can change its name, description and privacy; a
-group's admins can rename it. Everyone sees `isAdmin`, `createdAt` and `createdBy` on conversations and channels.
-Direct messages have no settings. Changes are broadcast as `.conversation.updated`.
+Groups and channels have admins (their creator to start with) and members; each member's `role` comes with
+`participants` / `members`. Admins:
+
+- change a channel's name, description and privacy, or a group's name (changes are broadcast as
+  `.conversation.updated`);
+- remove people, and make people admins or members again (`PATCH {kind}/{id}/members/{userId}` with `{ role }`,
+  `Chat::setRole()`); a chat always keeps one admin;
+- are the only ones who add people to a **private channel** (in groups and public channels any member can).
+
+The creator is the chat's owner: always an admin while they're in it (again if they come back), and other admins can't
+remove them or change their role.
+
+When the last admin leaves, the member they choose takes over (`DELETE {kind}/{id}/members/me` with
+`{ successorId }`), or else whoever has been in it longest; the chat says so ("… made … an admin"). Everyone sees
+`isAdmin`, `createdAt` and `createdBy` on conversations and channels; direct messages have no admins or settings.
 
 ## GIFs
 
@@ -214,8 +226,8 @@ back to you.
 ## Changing the rules
 
 Register your own policies for `Pvngu\Chat\Models\Conversation` (`view`, `send`, `participate`, `addMembers`,
-`removeMember`, `update`) or `Pvngu\Chat\Models\Message` (`update`, `delete`, `react`, `pin`). App service providers boot after
-packages, so yours replace the defaults.
+`removeMember`, `update`, `manageRoles`) or `Pvngu\Chat\Models\Message` (`update`, `delete`, `react`, `pin`). App
+service providers boot after packages, so yours replace the defaults.
 
 ## API
 
@@ -234,7 +246,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
 | POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]?, gif? }` (multipart with files) |
 | POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |
-| POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave |
+| POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave `{ successorId? }` |
+| PATCH | `{kind}/{id}/members/{userId}` | Admins: `{ role: 'admin' \| 'member' }` |
 | PATCH / DELETE | `messages/{id}` | Edit `{ body }`; delete |
 | POST / DELETE | `messages/{id}/reactions`, `/reactions/{emoji}` | `{ emoji }` |
 | POST | `messages/{id}/pin` | `{ pinned }` |

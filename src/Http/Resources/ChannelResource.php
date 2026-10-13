@@ -25,8 +25,12 @@ class ChannelResource extends JsonResource
             'name' => (string) $this->name,
             'isPrivate' => $this->is_private,
             'description' => $this->description,
+            // With their role: admins manage the chat
             'members' => $this->participants
-                ->map(fn (Participant $participant) => $this->person($participant->user, $participant->user_id))
+                ->map(fn (Participant $participant) => [
+                    ...$this->person($participant->user, $participant->user_id),
+                    'role' => $participant->role,
+                ])
                 ->values(),
             'unreadCount' => (int) ($this->unread_count ?? 0),
             'isMember' => $this->viewer_participant_id !== null,

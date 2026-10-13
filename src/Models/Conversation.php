@@ -21,6 +21,7 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property bool $is_private
  * @property string $tenant
  * @property string|null $direct_key
+ * @property int|string|null $created_by
  * @property Carbon|null $last_message_at
  * @property int|null $unread_count Set by withViewerState()
  * @property int|null $viewer_participant_id Set by withViewerState()
@@ -39,9 +40,10 @@ class Conversation extends ChatModel
     }
 
     /** @return HasMany<Participant, $this> */
+    // In the order they joined
     public function participants(): HasMany
     {
-        return $this->hasMany(Participant::class);
+        return $this->hasMany(Participant::class)->orderBy('id');
     }
 
     /** @return HasMany<Message, $this> */
@@ -82,6 +84,12 @@ class Conversation extends ChatModel
     public function isPublicChannel(): bool
     {
         return $this->isChannel() && ! $this->is_private;
+    }
+
+    // Who made it: the owner of a group or channel, always an admin while they're in it
+    public function isCreator(Model $user): bool
+    {
+        return $this->created_by !== null && (string) $this->created_by === (string) $user->getKey();
     }
 
     public function participantFor(Model $user): ?Participant
