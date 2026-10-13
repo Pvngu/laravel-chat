@@ -20,8 +20,10 @@ First version.
   the chat, or everyone online.
 - Membership lines: joining, leaving, adding and removing people post a line in the chat (`event` on messages,
   `Chat::addMember()`, `Chat::removeMember()`); they don't count as unread or notify anyone.
-- Presence for `@here`: any chat request or a heartbeat (`POST presence`) marks you online for two minutes;
-  `ChatPresence` lets apps use their own.
+- Presence: online, away and offline. A presence channel per tenant (joining it is coming online), heartbeats with
+  your status (`POST presence`), `.presence.changed` when someone goes away or comes back, and `GET presence` for the
+  current statuses. Online on any connection counts; `@here` reaches people who are online. `ChatPresence` lets apps
+  use their own.
 - Notification settings per person and chat (all, mentions, none, and a temporary mute), with `Chat::recipients()`
   for apps that send push or email notifications.
 - Settings: admins change a channel's name, description and privacy, or a group's name (`PATCH {kind}/{id}`,

@@ -134,9 +134,24 @@ as "@Name" in previews and reply quotes.
 "@here". They count as a mention for each of those people (unread counts, notifications) without being listed in
 `mentions`, so a message to a large channel stays small.
 
-Online means having used the chat API in the last two minutes (`presence.ttl`); vue-chat's store sends a heartbeat
-(`POST presence`) every minute while the page is open. If your app already knows who's online, implement
-`Pvngu\Chat\Contracts\ChatPresence` (`touch($user)` and `online($userKeys)`) and set `presence.driver`.
+`@here` reaches the people who are online, not away (see Presence).
+
+## Presence
+
+Each person is online, away or offline, shown as green, yellow and gray dots in vue-chat:
+
+- **Online and offline:** everyone in a tenant joins its presence channel (`chat.presence.{key}`, named by
+  `Chat::presenceChannel($user)` and `GET presence`) while the chat is open. Joining and leaving it is coming online
+  and going offline, in real time.
+- **Away:** vue-chat sends a heartbeat (`POST presence` with `status: online | away`) every minute and whenever it
+  changes: away while the page is hidden or idle. When someone's status changes, the others get `.presence.changed` on
+  the presence channel. Online on any tab or device counts as online.
+- `GET presence?ids=a,b,c` says who of them is online or away now (only people in your tenant), for a page that just
+  joined.
+
+The default `CachePresence` keeps what each connection (Echo socket) last reported for two minutes (`presence.ttl`),
+so a closed tab drops out on its own; any chat request also counts as being around. If your app already tracks
+presence, implement `Pvngu\Chat\Contracts\ChatPresence` (`touch()` and `statuses()`) and set `presence.driver`.
 
 Each person chooses how they hear about a chat: every message (`all`, the default), only mentions (`mentions`), or
 nothing (`none`), plus an optional `mutedUntil` to pause it for a while. The package doesn't send notifications
@@ -189,6 +204,7 @@ and when `broadcasting.enabled` is on they're broadcast too:
 | --- | --- |
 | `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted`, `.conversation.updated` |
 | `private-chat.user.{publicId}` | `.conversation.joined` |
+| `presence-chat.presence.{key}` | joining/leaving, `.presence.changed` |
 
 The package registers who may listen (members of the conversation, anyone in the tenant for a public channel, and
 each person on their own user channel). Your app needs broadcasting set up (`php artisan install:broadcasting`) so the
@@ -223,7 +239,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST / DELETE | `messages/{id}/reactions`, `/reactions/{emoji}` | `{ emoji }` |
 | POST | `messages/{id}/pin` | `{ pinned }` |
 | GET | `users` | People you can start a conversation with |
-| POST | `presence` | Heartbeat: you're online (any chat request also counts) |
+| GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
+| POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |
 
 Errors are Laravel's usual JSON: 422 with `errors` for validation, 403 or 404 for permissions.
 

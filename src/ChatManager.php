@@ -21,6 +21,7 @@ use Pvngu\Chat\Models\ConversationType;
 use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Participant;
+use Pvngu\Chat\Support\ChatConfig;
 use RuntimeException;
 use Throwable;
 
@@ -38,6 +39,12 @@ class ChatManager
     public function users(): ChatUserProvider
     {
         return $this->users;
+    }
+
+    // The presence channel of $user's tenant: chat.presence.{a hash of the tenant}
+    public function presenceChannel(Model $user): string
+    {
+        return ChatConfig::channel('presence.'.substr(sha1('laravel-chat|'.$this->users->tenant($user)), 0, 16));
     }
 
     // ── Starting conversations ──────────────────────────────────────────────
@@ -355,6 +362,28 @@ class ChatManager
             ->update([$flag.'_at' => $on ? now() : null]);
     }
 
+    /**
+     * Which of these people (user keys) are online, not away, for `@here`.
+     *
+     * @param  array<int, int|string>  $keys
+     * @return array<int, int|string>
+     */
+    private function onlineAmong(array $keys, Message $message): array
+    {
+        $sender = $message->sender;
+        if ($keys === [] || $sender === null) {
+            return [];
+        }
+        $people = ChatConfig::userModel()::query()->whereKey($keys)->get();
+        $statuses = $this->presence->statuses($sender, $people->map(fn (Model $person) => $this->users->publicId($person))->all());
+
+        return $people
+            ->filter(fn (Model $person) => ($statuses[$this->users->publicId($person)] ?? null) === ChatPresence::ONLINE)
+            ->map(fn (Model $person) => $person->getKey())
+            ->values()
+            ->all();
+    }
+
     // A line in the chat for a membership change. It doesn't move the chat up the sidebar or count as unread.
     private function recordMembership(Conversation $conversation, Model $actor, string $event, Model $user): void
     {
@@ -402,7 +431,7 @@ class ChatManager
                 ->where('user_id', '!=', $message->sender_id)
                 ->pluck('user_id')
                 ->all();
-            foreach ($via === Mention::VIA_HERE ? $this->presence->online($members) : $members as $key) {
+            foreach ($via === Mention::VIA_HERE ? $this->onlineAmong($members, $message) : $members as $key) {
                 $mentioned[(string) $key] ??= [$key, $via];
             }
         }

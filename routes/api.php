@@ -56,6 +56,7 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         Route::delete('messages/{message}/reactions/{emoji}', [ReactionController::class, 'destroy'])->name('messages.reactions.destroy');
 
         Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::get('presence', [PresenceController::class, 'show'])->name('presence.show');
         Route::post('presence', [PresenceController::class, 'store'])->name('presence');
     });
 });

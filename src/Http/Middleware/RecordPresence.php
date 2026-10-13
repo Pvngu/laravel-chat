@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Pvngu\Chat\Contracts\ChatPresence;
 use Symfony\Component\HttpFoundation\Response;
 
-// Anyone using the chat API is online (for `@here`)
+// Anyone using the chat API is around: it keeps their connection's status (online when it's new)
 class RecordPresence
 {
     public function __construct(private readonly ChatPresence $presence) {}
@@ -15,7 +15,7 @@ class RecordPresence
     public function handle(Request $request, Closure $next): Response
     {
         if ($user = $request->user()) {
-            $this->presence->touch($user);
+            $this->presence->touch($user, connection: $request->header('X-Socket-ID'));
         }
 
         return $next($request);

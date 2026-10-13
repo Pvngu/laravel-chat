@@ -117,15 +117,17 @@ class MentionsTest extends TestCase
     public function test_presence_lasts_a_couple_of_minutes_after_the_last_request(): void
     {
         Carbon::setTestNow('2026-03-10 09:00:00');
+        $ann = $this->person('Ann Smith');
         $john = $this->person('John Doe');
         $presence = app(ChatPresence::class);
+        $id = (string) $john->id;
 
-        $this->assertSame([], $presence->online([$john->getKey()]));
+        $this->assertSame([], $presence->statuses($ann, [$id]));
         $this->actingAs($john)->getJson('/api/chat/conversations')->assertOk(); // any chat request counts
-        $this->assertSame([$john->getKey()], $presence->online([$john->getKey()]));
+        $this->assertSame([$id => 'online'], $presence->statuses($ann, [$id]));
 
         Carbon::setTestNow('2026-03-10 09:02:01');
-        $this->assertSame([], $presence->online([$john->getKey()]));
+        $this->assertSame([], $presence->statuses($ann, [$id]));
     }
 
     public function test_people_who_follow_only_mentions_hear_about_everyone_and_here(): void

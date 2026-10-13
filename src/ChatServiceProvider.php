@@ -64,6 +64,16 @@ class ChatServiceProvider extends ServiceProvider
             $broadcast->channel(ChatConfig::channel('user.{publicId}'), function (Model $user, string $publicId) {
                 return app(ChatUserProvider::class)->publicId($user) === $publicId;
             });
+
+            // Presence: everyone in a tenant joins its channel while the chat is open (online), and is told who else is
+            $broadcast->channel(ChatConfig::channel('presence.{key}'), function (Model $user, string $key) {
+                if (app(ChatManager::class)->presenceChannel($user) !== ChatConfig::channel("presence.$key")) {
+                    return false;
+                }
+                $person = app(ChatUserProvider::class)->present($user);
+
+                return ['id' => $person['id'], 'name' => $person['name']];
+            });
         });
     }
 }
