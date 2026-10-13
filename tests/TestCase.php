@@ -31,6 +31,7 @@ abstract class TestCase extends Orchestra
         $app['config']->set('laravel-chat.user_attributes.tenant', 'team');
         $app['config']->set('laravel-chat.user_attributes.avatar', 'avatar_url');
         $app['config']->set('broadcasting.default', 'null');
+        $app['config']->set('cache.default', 'array'); // presence
     }
 
     protected function defineDatabaseMigrations(): void

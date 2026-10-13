@@ -16,7 +16,10 @@ First version.
 - `Chat` facade for sending messages and creating conversations from code.
 - GIF messages (`gif` on messages), accepted only from the configured media hosts (KLIPY's by default).
 - Mentions (`<@publicId>` in the text): recorded per message, returned as `mentions`, counted unread per chat
-  (`mentionCount`) and shown by name in previews and reply quotes.
+  (`mentionCount`) and shown by name in previews and reply quotes. `<!everyone>` and `<!here>` mention everyone in
+  the chat, or everyone online.
+- Presence for `@here`: any chat request or a heartbeat (`POST presence`) marks you online for two minutes;
+  `ChatPresence` lets apps use their own.
 - Notification settings per person and chat (all, mentions, none, and a temporary mute), with `Chat::recipients()`
   for apps that send push or email notifications.
 - Settings: admins change a channel's name, description and privacy, or a group's name (`PATCH {kind}/{id}`,

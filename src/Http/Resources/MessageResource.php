@@ -57,8 +57,9 @@ class MessageResource extends JsonResource
                 'image' => (string) ($this->gif['image'] ?? ''),
                 'still' => (string) ($this->gif['still'] ?? ''),
             ] : null,
-            // People mentioned with `<@id>` in the text, so it can show their current names
-            'mentions' => $this->mentions
+            // People mentioned with `<@id>` in the text, so it can show their current names (`<!everyone>` and `<!here>`
+            // need no lookup)
+            'mentions' => $this->personMentions
                 ->map(fn (Mention $mention) => [
                     'id' => $this->personId($mention->user, $mention->user_id),
                     'name' => $this->person($mention->user, $mention->user_id)['name'],

@@ -7,8 +7,10 @@ use Pvngu\Chat\Http\Controllers\ChannelController;
 use Pvngu\Chat\Http\Controllers\ConversationController;
 use Pvngu\Chat\Http\Controllers\MemberController;
 use Pvngu\Chat\Http\Controllers\MessageController;
+use Pvngu\Chat\Http\Controllers\PresenceController;
 use Pvngu\Chat\Http\Controllers\ReactionController;
 use Pvngu\Chat\Http\Controllers\UserController;
+use Pvngu\Chat\Http\Middleware\RecordPresence;
 
 $prefix = config('laravel-chat.routes.prefix', 'api/chat');
 $name = config('laravel-chat.routes.name', 'chat.');
@@ -22,7 +24,9 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         ->middleware(['signed', SubstituteBindings::class])
         ->name('attachments.show');
 
-    Route::middleware([...config('laravel-chat.routes.middleware', ['api', 'auth:sanctum']), SubstituteBindings::class])->group(function () {
+    // Every request counts as being online, for `@here`
+    $middleware = [...config('laravel-chat.routes.middleware', ['api', 'auth:sanctum']), SubstituteBindings::class, RecordPresence::class];
+    Route::middleware($middleware)->group(function () {
         Route::get('conversations', [ConversationController::class, 'index'])->name('conversations.index');
         Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');
         Route::post('conversations/{conversation}/pin', [ConversationController::class, 'pin'])->name('conversations.pin');
@@ -52,5 +56,6 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         Route::delete('messages/{message}/reactions/{emoji}', [ReactionController::class, 'destroy'])->name('messages.reactions.destroy');
 
         Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::post('presence', [PresenceController::class, 'store'])->name('presence');
     });
 });

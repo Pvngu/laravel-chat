@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Events\ConversationJoined;
 use Pvngu\Chat\Events\ConversationUpdated;
@@ -17,6 +18,7 @@ use Pvngu\Chat\Events\MessageSent;
 use Pvngu\Chat\Events\MessageUpdated;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Models\ConversationType;
+use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Participant;
 use RuntimeException;
@@ -28,7 +30,10 @@ use Throwable;
  */
 class ChatManager
 {
-    public function __construct(private readonly ChatUserProvider $users) {}
+    public function __construct(
+        private readonly ChatUserProvider $users,
+        private readonly ChatPresence $presence,
+    ) {}
 
     public function users(): ChatUserProvider
     {
@@ -319,20 +324,44 @@ class ChatManager
         return $message;
     }
 
-    // Record who the text mentions with `<@id>`: people in the conversation's tenant (up to 50 per message)
+    // Record who the text mentions: people with `<@id>` (in the conversation's tenant, up to 50 per message), and the
+    // other members with `<!everyone>`, or those online now with `<!here>`. Someone named and included by a group
+    // mention counts once, as named.
     private function syncMentions(Message $message): void
     {
-        preg_match_all(Message::MENTION_PATTERN, $message->body, $matches);
+        preg_match_all(Message::MENTION_PATTERN, $message->body, $named);
+        preg_match_all(Message::GROUP_MENTION_PATTERN, $message->body, $groups);
         $tenant = $message->conversation()->value('tenant');
-        $people = collect(array_slice(array_unique($matches[1]), 0, 50))
+
+        $mentioned = []; // user key => via
+        collect(array_slice(array_unique($named[1]), 0, 50))
             ->map(fn (string $publicId) => $this->users->find($publicId))
             ->filter(fn (?Model $user) => $user !== null && $this->users->tenant($user) === $tenant)
-            ->unique(fn (Model $user) => (string) $user->getKey());
+            ->each(function (Model $user) use (&$mentioned) {
+                $mentioned[(string) $user->getKey()] = [$user->getKey(), Mention::VIA_PERSON];
+            });
+
+        if ($groups[1] !== []) {
+            $via = in_array('everyone', $groups[1], true) ? Mention::VIA_EVERYONE : Mention::VIA_HERE;
+            $members = $message->conversation->participants()
+                ->where('user_id', '!=', $message->sender_id)
+                ->pluck('user_id')
+                ->all();
+            foreach ($via === Mention::VIA_HERE ? $this->presence->online($members) : $members as $key) {
+                $mentioned[(string) $key] ??= [$key, $via];
+            }
+        }
 
         $message->mentions()->delete();
-        foreach ($people as $person) {
-            $message->mentions()->create(['conversation_id' => $message->conversation_id, 'user_id' => $person->getKey()]);
+        foreach (array_chunk(array_values($mentioned), 500) as $chunk) {
+            Mention::query()->insert(array_map(fn (array $mention) => [
+                'message_id' => $message->id,
+                'conversation_id' => $message->conversation_id,
+                'user_id' => $mention[0],
+                'via' => $mention[1],
+            ], $chunk));
         }
         $message->unsetRelation('mentions');
+        $message->unsetRelation('personMentions');
     }
 }

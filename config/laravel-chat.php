@@ -1,5 +1,6 @@
 <?php
 
+use Pvngu\Chat\Presence\CachePresence;
 use Pvngu\Chat\Users\DefaultChatUserProvider;
 
 return [
@@ -54,6 +55,15 @@ return [
         // GIF messages can only point at media on these hosts, over HTTPS. The defaults are KLIPY's media servers, for
         // vue-chat's createKlipyGifs(); an empty list turns GIF messages off.
         'media_hosts' => ['static.klipy.com', 'static1.klipy.com', 'static2.klipy.com'],
+    ],
+
+    'presence' => [
+        // Who counts as online for `@here` mentions. The default counts anyone who used the chat within `ttl` seconds
+        // (vue-chat sends a heartbeat every minute while the page is open); implement Pvngu\Chat\Contracts\ChatPresence
+        // to use your app's own presence instead.
+        'driver' => CachePresence::class,
+        'ttl' => 120,
+        'store' => null,            // cache store; null uses the default
     ],
 
     'broadcasting' => [

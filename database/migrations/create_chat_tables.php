@@ -84,12 +84,14 @@ return new class extends Migration
             $table->unique(['message_id', 'user_id', 'emoji']);
         });
 
-        // Who a message mentions (`<@id>` in its text): unread mention counts and notifications
+        // Who a message mentions: people by name (`<@id>` in its text), everyone (`<!everyone>`) or everyone online
+        // (`<!here>`). For unread mention counts and notifications.
         Schema::create($prefix.'mentions', function (Blueprint $table) use ($prefix) {
             $table->id();
             $table->foreignId('message_id')->constrained($prefix.'messages')->cascadeOnDelete();
             $table->foreignId('conversation_id')->constrained($prefix.'conversations')->cascadeOnDelete();
             $this->userColumn($table, 'user_id');
+            $table->string('via', 16)->default('person'); // person | everyone | here
 
             $table->unique(['message_id', 'user_id']);
             $table->index(['user_id', 'conversation_id', 'message_id']);

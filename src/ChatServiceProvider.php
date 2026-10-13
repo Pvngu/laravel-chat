@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Pvngu\Chat\Console\InstallCommand;
+use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Models\Message;
@@ -21,6 +22,7 @@ class ChatServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/laravel-chat.php', 'laravel-chat');
 
         $this->app->singleton(ChatUserProvider::class, fn ($app) => $app->make(config('laravel-chat.user_provider')));
+        $this->app->singleton(ChatPresence::class, fn ($app) => $app->make(config('laravel-chat.presence.driver')));
         $this->app->singleton(ChatManager::class);
     }
 

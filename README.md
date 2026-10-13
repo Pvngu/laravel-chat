@@ -129,6 +129,14 @@ message box writes when someone picks a name after `@`. The package records who 
 same tenant), returns them as `mentions: [{ id, name }]`, counts unread ones per chat (`mentionCount`), and shows them
 as "@Name" in previews and reply quotes.
 
+`<!everyone>` mentions everyone else in the chat and `<!here>` everyone else who's online, shown as "@everyone" and
+"@here". They count as a mention for each of those people (unread counts, notifications) without being listed in
+`mentions`, so a message to a large channel stays small.
+
+Online means having used the chat API in the last two minutes (`presence.ttl`); vue-chat's store sends a heartbeat
+(`POST presence`) every minute while the page is open. If your app already knows who's online, implement
+`Pvngu\Chat\Contracts\ChatPresence` (`touch($user)` and `online($userKeys)`) and set `presence.driver`.
+
 Each person chooses how they hear about a chat: every message (`all`, the default), only mentions (`mentions`), or
 nothing (`none`), plus an optional `mutedUntil` to pause it for a while. The package doesn't send notifications
 itself; when you do (push, email), ask it who wants one:
@@ -205,6 +213,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST / DELETE | `messages/{id}/reactions`, `/reactions/{emoji}` | `{ emoji }` |
 | POST | `messages/{id}/pin` | `{ pinned }` |
 | GET | `users` | People you can start a conversation with |
+| POST | `presence` | Heartbeat: you're online (any chat request also counts) |
 
 Errors are Laravel's usual JSON: 422 with `errors` for validation, 403 or 404 for permissions.
 

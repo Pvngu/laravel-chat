@@ -2,7 +2,10 @@
 
 namespace Pvngu\Chat\Tests\Feature;
 
+use Illuminate\Support\Carbon;
+use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Facades\Chat;
+use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Tests\TestCase;
 
 class MentionsTest extends TestCase
@@ -64,5 +67,75 @@ class MentionsTest extends TestCase
         $this->actingAs($sara)
             ->postJson("/api/chat/conversations/{$group->id}/messages", ['body' => 'On it', 'replyToId' => (string) $message->id])
             ->assertJsonPath('data.replyTo.text', 'Over to @Sara Lane');
+    }
+
+    public function test_everyone_mentions_every_other_member_without_listing_them(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $sara = $this->person('Sara Lane');
+        $group = Chat::group($ann, [$john, $sara], 'Launch');
+
+        $this->actingAs($ann)
+            ->postJson("/api/chat/conversations/{$group->id}/messages", ['body' => "<!everyone> standup, <@{$john->id}> first"])
+            ->assertCreated()
+            ->assertJsonPath('data.text', "<!everyone> standup, <@{$john->id}> first")
+            ->assertJsonPath('data.mentions', [['id' => (string) $john->id, 'name' => 'John Doe']]);
+
+        foreach ([$john, $sara] as $person) {
+            $this->actingAs($person)->getJson('/api/chat/conversations')
+                ->assertJsonPath('data.0.mentionCount', 1)
+                ->assertJsonPath('data.0.lastMessage.text', '@everyone standup, @John Doe first');
+        }
+        $this->actingAs($ann)->getJson('/api/chat/conversations')->assertJsonPath('data.0.mentionCount', 0);
+        // Named people stay named; the rest come from @everyone
+        $this->assertSame(
+            [(string) $john->id => 'person', (string) $sara->id => 'everyone'],
+            Mention::query()->orderBy('user_id')->pluck('via', 'user_id')->mapWithKeys(fn ($via, $id) => [(string) $id => $via])->all(),
+        );
+    }
+
+    public function test_here_mentions_only_the_members_online_now(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $sara = $this->person('Sara Lane');
+        $channel = Chat::channel($ann, 'general');
+        Chat::addParticipant($channel, $john);
+        Chat::addParticipant($channel, $sara);
+
+        // John has the chat open (its heartbeat); Sara doesn't
+        $this->actingAs($john)->postJson('/api/chat/presence')->assertNoContent();
+        Chat::send($channel, $ann, '<!here> lunch?');
+
+        $this->actingAs($john)->getJson('/api/chat/channels')->assertJsonPath('data.0.mentionCount', 1);
+        $this->actingAs($sara)->getJson('/api/chat/channels')
+            ->assertJsonPath('data.0.mentionCount', 0)
+            ->assertJsonPath('data.0.unreadCount', 1);
+    }
+
+    public function test_presence_lasts_a_couple_of_minutes_after_the_last_request(): void
+    {
+        Carbon::setTestNow('2026-03-10 09:00:00');
+        $john = $this->person('John Doe');
+        $presence = app(ChatPresence::class);
+
+        $this->assertSame([], $presence->online([$john->getKey()]));
+        $this->actingAs($john)->getJson('/api/chat/conversations')->assertOk(); // any chat request counts
+        $this->assertSame([$john->getKey()], $presence->online([$john->getKey()]));
+
+        Carbon::setTestNow('2026-03-10 09:02:01');
+        $this->assertSame([], $presence->online([$john->getKey()]));
+    }
+
+    public function test_people_who_follow_only_mentions_hear_about_everyone_and_here(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $group = Chat::group($ann, [$john]);
+        Chat::setNotifications($group, $john, 'mentions');
+
+        $this->assertSame([], Chat::recipients(Chat::send($group, $ann, 'Plain update'))->all());
+        $this->assertSame(['John Doe'], Chat::recipients(Chat::send($group, $ann, '<!everyone> heads up'))->pluck('name')->all());
     }
 }

@@ -61,7 +61,7 @@ class Conversation extends ChatModel
     // Relations a ConversationResource reads
     public static function presentationRelations(): array
     {
-        return ['participants.user', 'creator', 'latestMessage.sender', 'latestMessage.attachments', 'latestMessage.mentions.user'];
+        return ['participants.user', 'creator', 'latestMessage.sender', 'latestMessage.attachments', 'latestMessage.personMentions.user'];
     }
 
     public function isDirect(): bool
