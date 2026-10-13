@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -35,39 +36,46 @@ class Message extends ChatModel
         ];
     }
 
+    /** @return BelongsTo<Conversation, $this> */
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
     }
 
+    /** @return BelongsTo<Model, $this> */
     public function sender(): BelongsTo
     {
         return $this->belongsTo(ChatConfig::userModel(), 'sender_id');
     }
 
     // Deleted originals are kept so the quote can say whose message it was
+    /** @return BelongsTo<Message, $this> */
     public function replyTo(): BelongsTo
     {
         return $this->belongsTo(self::class, 'reply_to_id')->withTrashed();
     }
 
     // Everyone the message mentions, including through @everyone and @here: unread counts and notifications
+    /** @return HasMany<Mention, $this> */
     public function mentions(): HasMany
     {
         return $this->hasMany(Mention::class);
     }
 
     // The people mentioned by name, which is what's shown (an @everyone stays one token, however big the chat)
+    /** @return HasMany<Mention, $this> */
     public function personMentions(): HasMany
     {
         return $this->hasMany(Mention::class)->where('via', Mention::VIA_PERSON);
     }
 
+    /** @return HasMany<Attachment, $this> */
     public function attachments(): HasMany
     {
         return $this->hasMany(Attachment::class);
     }
 
+    /** @return HasMany<Reaction, $this> */
     public function reactions(): HasMany
     {
         return $this->hasMany(Reaction::class)->orderBy('id');

@@ -38,21 +38,25 @@ class Conversation extends ChatModel
         ];
     }
 
+    /** @return HasMany<Participant, $this> */
     public function participants(): HasMany
     {
         return $this->hasMany(Participant::class);
     }
 
+    /** @return HasMany<Message, $this> */
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
     }
 
+    /** @return BelongsTo<Model, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(ChatConfig::userModel(), 'created_by');
     }
 
+    /** @return HasOne<Message, $this> */
     public function latestMessage(): HasOne
     {
         return $this->hasOne(Message::class)->latestOfMany();

@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Pvngu\Chat\Support\ChatConfig;
 
@@ -28,11 +29,13 @@ class Participant extends ChatModel
         ];
     }
 
+    /** @return BelongsTo<Conversation, $this> */
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
     }
 
+    /** @return BelongsTo<Model, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(ChatConfig::userModel(), 'user_id');

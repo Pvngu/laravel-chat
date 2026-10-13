@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Pvngu\Chat\Support\ChatConfig;
 
@@ -25,11 +26,13 @@ class Mention extends ChatModel
 
     protected string $baseTable = 'mentions';
 
+    /** @return BelongsTo<Message, $this> */
     public function message(): BelongsTo
     {
         return $this->belongsTo(Message::class);
     }
 
+    /** @return BelongsTo<Model, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(ChatConfig::userModel(), 'user_id');

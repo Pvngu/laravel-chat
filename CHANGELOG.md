@@ -27,4 +27,5 @@ First version.
 - Events (`MessageSent`, `MessageUpdated`, `MessageDeleted`, `ConversationJoined`, `ConversationUpdated`) broadcast
   on private channels, with channel authorization.
 - `chat:install` command.
+- Model relations declare their related models (generic `@return` types), so Larastan and IDEs know them.
 - Tests on Orchestra Testbench; CI on PHP 8.2–8.4 with Laravel 12 and 13.

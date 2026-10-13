@@ -18,6 +18,7 @@ class Attachment extends ChatModel
 {
     protected string $baseTable = 'attachments';
 
+    /** @return BelongsTo<Message, $this> */
     public function message(): BelongsTo
     {
         return $this->belongsTo(Message::class);
