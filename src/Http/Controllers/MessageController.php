@@ -36,13 +36,13 @@ class MessageController extends Controller
         Gate::authorize('send', $conversation);
 
         $replyTo = $request->filled('replyToId')
-            ? $conversation->messages()->find($request->input('replyToId'))
+            ? $conversation->messages()->whereNull('event')->find($request->input('replyToId'))
                 ?? throw ValidationException::withMessages(['replyToId' => 'That message isn\'t in this conversation.'])
             : null;
 
         $forwardedFrom = null;
         if ($request->filled('forwardedFromId')) {
-            $forwardedFrom = Message::query()->find($request->input('forwardedFromId'));
+            $forwardedFrom = Message::query()->whereNull('event')->find($request->input('forwardedFromId'));
             if (! $forwardedFrom || Gate::denies('view', $forwardedFrom->conversation)) {
                 throw ValidationException::withMessages(['forwardedFromId' => 'That message can\'t be forwarded.']);
             }

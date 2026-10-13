@@ -53,6 +53,10 @@ return new class extends Migration
             $this->userColumn($table, 'sender_id')->nullable();
             $table->text('body');
             $table->json('gif')->nullable(); // provider, id, title, width, height, video, image, still
+            // A membership change shown in the chat (joined, left, added, removed): the sender did it, event_user_id is
+            // who it happened to (the sender too, when they joined or left)
+            $table->string('event', 16)->nullable();
+            $this->userColumn($table, 'event_user_id')->nullable();
             $table->foreignId('reply_to_id')->nullable()->constrained($prefix.'messages')->nullOnDelete();
             $table->unsignedBigInteger('forwarded_from_id')->nullable();
             $table->timestamp('edited_at')->nullable();

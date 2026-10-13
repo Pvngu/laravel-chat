@@ -59,6 +59,11 @@ class MessageResource extends JsonResource
             ] : null,
             // People mentioned with `<@id>` in the text, so it can show their current names (`<!everyone>` and `<!here>`
             // need no lookup)
+            // A membership change instead of text: the sender did it to `user` (the sender too for joined and left)
+            'event' => $this->event ? [
+                'type' => $this->event,
+                'user' => $this->person($this->eventUser, $this->event_user_id),
+            ] : null,
             'mentions' => $this->personMentions
                 ->map(fn (Mention $mention) => [
                     'id' => $this->personId($mention->user, $mention->user_id),

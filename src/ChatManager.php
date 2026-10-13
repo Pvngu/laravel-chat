@@ -140,6 +140,37 @@ class ChatManager
         $conversation->unsetRelation('participants');
     }
 
+    /**
+     * Adds someone to a group or channel and says so in the chat: "joined" when they add themselves ($by is them or
+     * null), otherwise "$by added them". Nothing happens when they're already in.
+     */
+    public function addMember(Conversation $conversation, Model $user, ?Model $by = null): Participant
+    {
+        $participant = $this->addParticipant($conversation, $user);
+
+        if ($participant->wasRecentlyCreated) {
+            $joined = $by === null || $by->is($user);
+            $this->recordMembership($conversation, $by ?? $user, $joined ? Message::EVENT_JOINED : Message::EVENT_ADDED, $user);
+        }
+
+        return $participant;
+    }
+
+    /**
+     * Takes someone out of a group or channel and says so in the chat: "left" when they leave ($by is them or null),
+     * otherwise "$by removed them". Nothing happens when they aren't in.
+     */
+    public function removeMember(Conversation $conversation, Model $user, ?Model $by = null): void
+    {
+        if (! $conversation->participants()->where('user_id', $user->getKey())->exists()) {
+            return;
+        }
+
+        $left = $by === null || $by->is($user);
+        $this->recordMembership($conversation, $by ?? $user, $left ? Message::EVENT_LEFT : Message::EVENT_REMOVED, $user);
+        $this->removeParticipant($conversation, $user);
+    }
+
     // ── Messages ────────────────────────────────────────────────────────────
 
     /**
@@ -163,6 +194,10 @@ class ChatManager
         try {
             $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $disk, $directory, &$stored) {
                 $participant = $this->addParticipant($conversation, $sender, notify: false);
+                // Posting in a public channel joins it
+                if ($participant->wasRecentlyCreated) {
+                    $this->recordMembership($conversation, $sender, Message::EVENT_JOINED, $sender);
+                }
 
                 /** @var Message $message */
                 $message = $conversation->messages()->create([
@@ -298,6 +333,10 @@ class ChatManager
      */
     public function recipients(Message $message): Collection
     {
+        if ($message->isEvent()) {
+            return collect(); // "joined", "left"… aren't worth a notification
+        }
+
         $mentioned = $message->mentions()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
 
         return $message->conversation->participants()->with('user')->get()
@@ -314,6 +353,22 @@ class ChatManager
         $conversation->participants()
             ->where('user_id', $user->getKey())
             ->update([$flag.'_at' => $on ? now() : null]);
+    }
+
+    // A line in the chat for a membership change. It doesn't move the chat up the sidebar or count as unread.
+    private function recordMembership(Conversation $conversation, Model $actor, string $event, Model $user): void
+    {
+        /** @var Message $message */
+        $message = $conversation->messages()->create([
+            'sender_id' => $actor->getKey(),
+            'body' => '',
+            'event' => $event,
+            'event_user_id' => $user->getKey(),
+        ]);
+        // Everyone sees the line, including whoever made the change: their request doesn't return it
+        $sent = new MessageSent($message);
+        $sent->socket = null;
+        event($sent);
     }
 
     private function reactionsChanged(Message $message): Message

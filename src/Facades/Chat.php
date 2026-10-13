@@ -14,6 +14,8 @@ use Pvngu\Chat\ChatManager;
  * @method static void setNotifications(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, string $level, ?\DateTimeInterface $mutedUntil = null)
  * @method static \Illuminate\Support\Collection recipients(\Pvngu\Chat\Models\Message $message)
  * @method static \Pvngu\Chat\Models\Participant addParticipant(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, string $role = 'member', bool $notify = true)
+ * @method static \Pvngu\Chat\Models\Participant addMember(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, ?\Illuminate\Database\Eloquent\Model $by = null)
+ * @method static void removeMember(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, ?\Illuminate\Database\Eloquent\Model $by = null)
  *
  * @see ChatManager
  */

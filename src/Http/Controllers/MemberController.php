@@ -15,7 +15,7 @@ class MemberController extends Controller
     {
         Gate::authorize('addMembers', $conversation);
         $person = $this->findPerson($request->user(), $request->input('userId'), 'userId');
-        $this->chat->addParticipant($conversation, $person);
+        $this->chat->addMember($conversation, $person, by: $request->user());
 
         return response()->noContent();
     }
@@ -24,7 +24,7 @@ class MemberController extends Controller
     {
         $person = $this->findPerson($request->user(), $userId, 'userId');
         Gate::authorize('removeMember', [$conversation, $person]);
-        $this->chat->removeParticipant($conversation, $person);
+        $this->chat->removeMember($conversation, $person, by: $request->user());
 
         return response()->noContent();
     }
@@ -32,7 +32,7 @@ class MemberController extends Controller
     public function leave(Request $request, Conversation $conversation): Response
     {
         Gate::authorize('removeMember', [$conversation, $request->user()]);
-        $this->chat->removeParticipant($conversation, $request->user());
+        $this->chat->removeMember($conversation, $request->user());
 
         return response()->noContent();
     }

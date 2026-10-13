@@ -15,6 +15,8 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property int $conversation_id
  * @property int|string|null $sender_id
  * @property string $body
+ * @property string|null $event joined, left, added or removed: a membership change shown in the chat
+ * @property int|string|null $event_user_id who it happened to
  * @property int|null $reply_to_id
  * @property int|null $forwarded_from_id
  * @property Carbon|null $edited_at
@@ -40,6 +42,26 @@ class Message extends ChatModel
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
+    }
+
+    // Membership changes: someone joined or left, or the sender added or removed someone (event_user_id)
+    public const EVENT_JOINED = 'joined';
+
+    public const EVENT_LEFT = 'left';
+
+    public const EVENT_ADDED = 'added';
+
+    public const EVENT_REMOVED = 'removed';
+
+    public function isEvent(): bool
+    {
+        return $this->event !== null;
+    }
+
+    /** @return BelongsTo<Model, $this> */
+    public function eventUser(): BelongsTo
+    {
+        return $this->belongsTo(ChatConfig::userModel(), 'event_user_id');
     }
 
     /** @return BelongsTo<Model, $this> */
@@ -123,6 +145,6 @@ class Message extends ChatModel
     // Relations a MessageResource reads
     public static function presentationRelations(): array
     {
-        return ['sender', 'replyTo.sender', 'replyTo.personMentions.user', 'attachments', 'reactions.user', 'personMentions.user'];
+        return ['sender', 'eventUser', 'replyTo.sender', 'replyTo.personMentions.user', 'attachments', 'reactions.user', 'personMentions.user'];
     }
 }

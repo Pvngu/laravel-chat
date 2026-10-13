@@ -57,6 +57,7 @@ class MessagesTest extends TestCase
             'reactions' => [],
             'attachments' => [],
             'gif' => null,
+            'event' => null,
             'mentions' => [],
             'replyTo' => null,
         ]);

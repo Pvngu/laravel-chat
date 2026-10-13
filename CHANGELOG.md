@@ -18,6 +18,8 @@ First version.
 - Mentions (`<@publicId>` in the text): recorded per message, returned as `mentions`, counted unread per chat
   (`mentionCount`) and shown by name in previews and reply quotes. `<!everyone>` and `<!here>` mention everyone in
   the chat, or everyone online.
+- Membership lines: joining, leaving, adding and removing people post a line in the chat (`event` on messages,
+  `Chat::addMember()`, `Chat::removeMember()`); they don't count as unread or notify anyone.
 - Presence for `@here`: any chat request or a heartbeat (`POST presence`) marks you online for two minutes;
   `ChatPresence` lets apps use their own.
 - Notification settings per person and chat (all, mentions, none, and a temporary mute), with `Chat::recipients()`

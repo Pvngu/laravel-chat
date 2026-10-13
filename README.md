@@ -118,6 +118,7 @@ $channel = Chat::channel($user, 'announcements');
 
 Chat::send($channel, $bot, 'Deploy finished ✅');            // also accepts UploadedFile[] attachments
 Chat::addParticipant($channel, $newHire);
+Chat::addMember($channel, $newHire, by: $user);              // shows "… added …" in the chat (removeMember too)
 Chat::update($channel, ['description' => 'Company news']);   // name, description, isPrivate (channels)
 Chat::setNotifications($channel, $user, 'mentions');         // 'all' | 'mentions' | 'none', optional mute end
 ```
@@ -151,6 +152,15 @@ Event::listen(function (MessageSent $event) {
 
 `Chat::recipients($message)` is everyone in the chat but the sender, minus people who muted it or follow only
 mentions and weren't mentioned.
+
+## Membership lines
+
+When someone joins (by posting in a public channel), leaves, or is added or removed through the API, the chat gets a
+line saying so: a message with `event: { type, user }` (`joined`, `left`, `added`, `removed`; the sender did it, `user`
+is who it happened to) and empty text. These lines don't count as unread, aren't the sidebar's preview, aren't sent to
+`Chat::recipients()` and can't be edited, reacted to or replied to. From code, `Chat::addMember()` and
+`Chat::removeMember()` (with an optional `by:`) do the same; `addParticipant()` and `removeParticipant()` stay silent,
+e.g. for seeding or creating a group.
 
 ## Settings
 
