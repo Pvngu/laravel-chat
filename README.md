@@ -33,7 +33,7 @@ Check `config/laravel-chat.php` before migrating:
 - `user_attributes`: which attributes hold the name, email and avatar, and `tenant` (e.g. `'company_id'`) for
   multi-tenant apps: people only see conversations and other people with the same value.
 - `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments`,
-  `chat_reactions` and `chat_reminders`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
+  `chat_reactions`, `chat_reminders` and `chat_saved_messages`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
   are installed.
 
 ### Frontend
@@ -212,8 +212,16 @@ the catch-up command too:
 Schedule::command('chat:send-reminders')->everyMinute();
 ```
 
+## Saved messages
+
+Anyone can save a message for later: `PUT messages/{id}/saved` (or `Chat::saveMessage()`), and `DELETE` to unsave it.
+`GET saved` lists yours, newest first (`laravel-chat.pagination.saved`, 200 by default), each with the message as chats
+show it, its chat (`kind`, `id`, `name`, `isDirect`) and `savedAt`. Deleted messages, and those of chats you can't see
+anymore, drop out.
+
 Upgrading from an earlier version: run `php artisan chat:install` again (or publish `laravel-chat-migrations`) and keep
-only the new `create_chat_reminders_table` migration, then `php artisan migrate`.
+only the migrations you don't have yet (`create_chat_reminders_table`, `create_chat_saved_messages_table`), then
+`php artisan migrate`.
 
 ## GIFs
 
@@ -274,6 +282,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST | `messages/{id}/pin` | `{ pinned }` |
 | PUT / DELETE | `messages/{id}/reminder` | Remind you: `{ remindAt }` (a time to come, within a year); remove it |
 | GET | `reminders` | Your reminders still to come: `{ messageId, remindAt, chat: { kind, id } }` |
+| PUT / DELETE | `messages/{id}/saved` | Save a message for later; unsave it |
+| GET | `saved` | Your saved messages, newest first: `{ message, chat: { kind, id, name, isDirect }, savedAt }` |
 | GET | `users` | People you can start a conversation with |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |

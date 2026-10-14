@@ -25,6 +25,7 @@ use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Participant;
 use Pvngu\Chat\Models\Reminder;
+use Pvngu\Chat\Models\SavedMessage;
 use Pvngu\Chat\Support\ChatConfig;
 use RuntimeException;
 use Throwable;
@@ -402,6 +403,19 @@ class ChatManager
             });
 
         return $sent;
+    }
+
+    // ── Saved for later ─────────────────────────────────────────────────────
+
+    public function saveMessage(Model $user, Message $message): SavedMessage
+    {
+        /** @var SavedMessage */
+        return SavedMessage::query()->firstOrCreate(['user_id' => $user->getKey(), 'message_id' => $message->id]);
+    }
+
+    public function unsaveMessage(Model $user, Message $message): void
+    {
+        SavedMessage::query()->where('user_id', $user->getKey())->where('message_id', $message->id)->delete();
     }
 
     // ── Per-person state ────────────────────────────────────────────────────

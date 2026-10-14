@@ -22,6 +22,8 @@ use Pvngu\Chat\ChatManager;
  * @method static void forgetReminder(\Illuminate\Database\Eloquent\Model $user, \Pvngu\Chat\Models\Message $message)
  * @method static bool sendReminder(\Pvngu\Chat\Models\Reminder $reminder)
  * @method static int sendDueReminders()
+ * @method static \Pvngu\Chat\Models\SavedMessage saveMessage(\Illuminate\Database\Eloquent\Model $user, \Pvngu\Chat\Models\Message $message)
+ * @method static void unsaveMessage(\Illuminate\Database\Eloquent\Model $user, \Pvngu\Chat\Models\Message $message)
  * @method static bool isLastAdmin(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user)
  *
  * @see ChatManager

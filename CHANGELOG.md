@@ -31,6 +31,8 @@ First version.
   and only admins add people to a private channel. The creator always stays an admin that others can't remove or
   demote. The last admin leaving hands over to the member they choose
   (`successorId`) or the longest-standing one. Role changes are membership lines (`promoted`, `demoted`).
+- Saved messages: `PUT` / `DELETE messages/{id}/saved` (`Chat::saveMessage()`, `Chat::unsaveMessage()`) and
+  `GET saved`, newest first with each message's chat. New migration: `create_chat_saved_messages_table`.
 - Reminders: `PUT messages/{id}/reminder` with `{ remindAt }` (`Chat::remind()`), `DELETE` to remove it, and
   `GET reminders`. A delayed queued job fires `ReminderDue` at that time (`chat:send-reminders` catches up); apps
   listen for it to notify the person. New migration: `create_chat_reminders_table`.

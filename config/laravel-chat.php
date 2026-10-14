@@ -42,6 +42,7 @@ return [
         'conversations' => 30,
         'messages' => 50,
         'files' => 30,              // a chat's Files tab
+        'saved' => 200,             // saved messages: the newest this many
     ],
 
     'attachments' => [
