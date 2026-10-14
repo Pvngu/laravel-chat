@@ -111,6 +111,46 @@ class ThreadsTest extends TestCase
         $this->assertCount(2, Chat::recipients($other));
     }
 
+    public function test_a_reply_also_sent_to_the_chat_shows_in_both()
+    {
+        $this->actingAs($this->john)
+            ->postJson($this->repliesUrl(), ['body' => 'Everyone: Friday it is', 'alsoSendToChat' => true])
+            ->assertCreated()
+            ->assertJsonPath('data.alsoInChat', true)
+            ->assertJsonPath('data.threadRoot', [
+                'messageId' => (string) $this->root->id,
+                'senderName' => 'Ann Smith',
+                'text' => 'Launch on Friday?',
+            ]);
+        Chat::send($this->channel, $this->sara, 'Only in the thread', thread: $this->root);
+
+        $this->actingAs($this->ann)->getJson("/api/chat/channels/{$this->channel->id}/messages")
+            ->assertJsonPath('data.*.text', ['Launch on Friday?', 'Everyone: Friday it is'])
+            ->assertJsonPath('data.0.replyCount', 2);
+        $this->actingAs($this->ann)->getJson($this->repliesUrl())->assertJsonCount(2, 'data');
+
+        // News for the chat: unread there (the reply only in the thread isn't), and everyone hears about it as their
+        // settings say
+        $this->actingAs($this->ann)->getJson('/api/chat/channels')->assertJsonPath('data.0.unreadCount', 1);
+        $inChat = Message::query()->where('also_in_chat', true)->firstOrFail();
+        $this->assertEqualsCanonicalizing([$this->ann->id, $this->sara->id], Chat::recipients($inChat)->map->getKey()->all());
+    }
+
+    public function test_the_threads_you_follow_come_with_their_latest_replies()
+    {
+        foreach (['One', 'Two', 'Three', 'Four'] as $text) {
+            Chat::send($this->channel, $this->john, $text, thread: $this->root);
+        }
+        $this->travel(1)->minute();
+        $other = Chat::send($this->channel, $this->sara, 'Another thread');
+        Chat::send($this->channel, $this->ann, 'Its only reply', thread: $other);
+
+        $this->actingAs($this->ann)->getJson('/api/chat/threads')
+            ->assertJsonPath('data.0.message.text', 'Another thread')
+            ->assertJsonPath('data.0.latestReplies.*.text', ['Its only reply'])
+            ->assertJsonPath('data.1.latestReplies.*.text', ['Two', 'Three', 'Four']); // the latest three, oldest first
+    }
+
     public function test_deleting_a_reply_counts_it_out()
     {
         $reply = Chat::send($this->channel, $this->john, 'Oops', thread: $this->root);

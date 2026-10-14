@@ -235,7 +235,7 @@ class ChatManager
     /**
      * Sends a message, storing any uploaded files on the configured disk. Posting in a public channel joins it. With
      * $thread it's a reply in that message's thread: it stays out of the chat itself (and its unread count), and
-     * whoever started the thread, replied or is mentioned follows it.
+     * whoever started the thread, replied or is mentioned follows it. With $alsoInChat it shows in the chat too.
      *
      * @param  array<int, UploadedFile>  $files
      */
@@ -248,13 +248,14 @@ class ChatManager
         ?Message $forwardedFrom = null,
         ?array $gif = null, // see MessageResource for the shape; the request validates where its media comes from
         ?Message $thread = null,
+        bool $alsoInChat = false,
     ): Message {
         $disk = config('laravel-chat.attachments.disk') ?? config('filesystems.default');
         $directory = trim((string) config('laravel-chat.attachments.directory', 'chat-attachments'), '/');
         $stored = [];
 
         try {
-            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $thread, $disk, $directory, &$stored) {
+            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $thread, $alsoInChat, $disk, $directory, &$stored) {
                 $participant = $this->addParticipant($conversation, $sender, notify: false);
                 // Posting in a public channel joins it
                 if ($participant->wasRecentlyCreated) {
@@ -269,6 +270,7 @@ class ChatManager
                     'reply_to_id' => $replyTo?->id,
                     'forwarded_from_id' => $forwardedFrom?->id,
                     'thread_id' => $thread?->id,
+                    'also_in_chat' => $thread !== null && $alsoInChat,
                 ]);
 
                 $this->syncMentions($message);
@@ -290,8 +292,9 @@ class ChatManager
 
                 if ($thread !== null) {
                     $this->threadReplied($thread, $message);
-
-                    return $message;
+                    if (! $alsoInChat) {
+                        return $message;
+                    }
                 }
 
                 $conversation->forceFill(['last_message_at' => $message->created_at])->save();
@@ -452,7 +455,8 @@ class ChatManager
     // A reply arrived: count it, and the people in the thread follow it (whoever started it, the replier, who it mentions)
     private function threadReplied(Message $thread, Message $reply): void
     {
-        $thread->forceFill(['reply_count' => $thread->reply_count + 1, 'last_reply_at' => $reply->created_at])->save();
+        // Counted from the table, not this copy of the message, which may be out of date
+        $thread->forceFill(['reply_count' => $thread->replies()->count(), 'last_reply_at' => $reply->created_at])->save();
 
         if ($thread->sender_id !== null) {
             $this->followThread($thread, $thread->sender_id);
@@ -531,8 +535,8 @@ class ChatManager
         }
 
         $mentioned = $message->mentions()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
-        // A reply in a thread: only the people following it, and anyone it mentions
-        $following = $message->thread_id === null ? null : ThreadFollower::query()
+        // A reply in a thread: only the people following it, and anyone it mentions (unless it was sent to the chat too)
+        $following = $message->thread_id === null || $message->also_in_chat ? null : ThreadFollower::query()
             ->where('thread_id', $message->thread_id)
             ->pluck('user_id')
             ->map(fn ($id) => (string) $id)

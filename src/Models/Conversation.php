@@ -62,7 +62,7 @@ class Conversation extends ChatModel
     // The latest real message, for the sidebar: membership changes and thread replies don't count
     public function latestMessage(): HasOne
     {
-        return $this->hasOne(Message::class)->ofMany(['id' => 'max'], fn ($query) => $query->whereNull('event')->whereNull('thread_id'));
+        return $this->hasOne(Message::class)->ofMany(['id' => 'max'], fn ($query) => $query->whereNull('event')->inChat());
     }
 
     // Relations a ConversationResource reads
@@ -133,7 +133,8 @@ class Conversation extends ChatModel
                     ->whereColumn("$messages.conversation_id", "$conversations.id")
                     ->whereNotNull('viewer.id')
                     ->whereNull("$messages.event") // joined, left… aren't news
-                    ->whereNull("$messages.thread_id") // replies in threads count in their thread
+                    // Replies in threads count in their thread, unless they were sent to the chat too
+                    ->where(fn ($q) => $q->whereNull("$messages.thread_id")->orWhere("$messages.also_in_chat", true))
                     ->whereRaw("$messages.id > coalesce(viewer.last_read_message_id, 0)")
                     ->whereNull("$messages.deleted_at")
                     ->where(fn ($q) => $q->whereNull("$messages.sender_id")->orWhere("$messages.sender_id", '!=', $userKey));

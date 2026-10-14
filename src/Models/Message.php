@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,6 +23,7 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property int|null $thread_id the message whose thread it's a reply in
  * @property int $reply_count a thread's replies
  * @property Carbon|null $last_reply_at
+ * @property bool $also_in_chat a reply also sent to its chat
  * @property Carbon|null $edited_at
  * @property Carbon|null $pinned_at
  * @property Carbon $created_at
@@ -38,6 +40,7 @@ class Message extends ChatModel
             'edited_at' => 'datetime',
             'pinned_at' => 'datetime',
             'last_reply_at' => 'datetime',
+            'also_in_chat' => 'boolean',
             'gif' => 'array',
         ];
     }
@@ -130,6 +133,19 @@ class Message extends ChatModel
         return $this->thread_id !== null;
     }
 
+    // A thread's latest replies; eager loaded with a limit, it's the latest few of each thread
+    /** @return HasMany<Message, $this> */
+    public function latestReplies(): HasMany
+    {
+        return $this->hasMany(Message::class, 'thread_id')->latest('id');
+    }
+
+    // Messages the chat shows: its own, and replies also sent to it
+    public function scopeInChat(Builder $query): void
+    {
+        $query->where(fn (Builder $inChat) => $inChat->whereNull('thread_id')->orWhere('also_in_chat', true));
+    }
+
     /** @return HasMany<Reminder, $this> */
     public function reminders(): HasMany
     {
@@ -184,6 +200,6 @@ class Message extends ChatModel
     // Relations a MessageResource reads
     public static function presentationRelations(): array
     {
-        return ['sender', 'eventUser', 'replyTo.sender', 'replyTo.personMentions.user', 'attachments', 'reactions.user', 'personMentions.user'];
+        return ['sender', 'eventUser', 'replyTo.sender', 'replyTo.personMentions.user', 'attachments', 'reactions.user', 'personMentions.user', 'thread.sender'];
     }
 }

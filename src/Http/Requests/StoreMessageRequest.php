@@ -15,6 +15,8 @@ class StoreMessageRequest extends FormRequest
             'attachments.*' => ['file', 'max:'.(int) config('laravel-chat.attachments.max_size_kb', 10240)],
             'replyToId' => ['nullable', 'string', 'regex:/^[0-9]+$/'],
             'forwardedFromId' => ['nullable', 'string', 'regex:/^[0-9]+$/'],
+            // A reply in a thread that shows in the chat too
+            'alsoSendToChat' => ['sometimes', 'boolean'],
 
             // A GIF picked from a provider such as KLIPY; its media must come from the configured hosts
             'gif' => ['nullable', 'array'],

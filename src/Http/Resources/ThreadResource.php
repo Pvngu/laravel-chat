@@ -27,6 +27,8 @@ class ThreadResource extends JsonResource
                 'isDirect' => $conversation->isDirect(),
             ],
             'unreadCount' => (int) ($this->unread_count ?? 0),
+            // Its latest replies (up to three), oldest first
+            'latestReplies' => MessageResource::collection($this->thread->latestReplies->reverse()->values()),
         ];
     }
 }

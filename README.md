@@ -227,13 +227,18 @@ Replies stay out of the chat itself: not in its messages, its unread count or it
 off says `replyCount` and `lastReplyAt`, and is broadcast again (`.message.updated`) when they change; each reply is
 broadcast as `.message.sent` with its `threadId`.
 
+A reply sent with `alsoSendToChat: true` (`Chat::send(..., thread: $message, alsoInChat: true)`) shows in the chat
+too, counting there like any message: it says `alsoInChat` and comes with `threadRoot` (`messageId`, `senderName`,
+`text`) so the chat can show what it replies to.
+
 Whoever started a thread, replied to it or is mentioned in it follows it: `GET threads` lists the threads you follow,
-latest reply first, with each one's `unreadCount` (`POST messages/{id}/thread/read` when you've seen them). Only
-followers, and anyone a reply mentions, are among `Chat::recipients()` for a reply.
+latest reply first, with each one's `unreadCount` and `latestReplies` (up to three, oldest first;
+`POST messages/{id}/thread/read` when you've seen them). Only followers, and anyone a reply mentions, are among
+`Chat::recipients()` for a reply that stays in its thread.
 
 Upgrading from an earlier version: run `php artisan chat:install` again (or publish `laravel-chat-migrations`) and keep
 only the migrations you don't have yet (`create_chat_reminders_table`, `create_chat_saved_messages_table`,
-`update_chat_messages_for_threads`), then
+`update_chat_messages_for_threads`, `update_chat_messages_for_threads_in_chat`), then
 `php artisan migrate`.
 
 ## GIFs
@@ -297,9 +302,9 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | GET | `reminders` | Your reminders still to come: `{ messageId, remindAt, chat: { kind, id } }` |
 | PUT / DELETE | `messages/{id}/saved` | Save a message for later; unsave it |
 | GET | `saved` | Your saved messages, newest first: `{ message, chat: { kind, id, name, isDirect }, savedAt }` |
-| GET / POST | `messages/{id}/replies?page=` | A thread's replies (page 1 is the latest); reply like a message |
+| GET / POST | `messages/{id}/replies?page=` | A thread's replies (page 1 is the latest); reply like a message, `alsoSendToChat?` |
 | POST | `messages/{id}/thread/read` | You've seen the thread's replies |
-| GET | `threads` | Threads you follow, latest reply first: `{ message, chat, unreadCount }` |
+| GET | `threads` | Threads you follow, latest reply first: `{ message, chat, unreadCount, latestReplies }` |
 | GET | `users` | People you can start a conversation with |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |

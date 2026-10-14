@@ -62,6 +62,8 @@ class MessagesTest extends TestCase
             'threadId' => null,
             'replyCount' => 0,
             'lastReplyAt' => null,
+            'alsoInChat' => false,
+            'threadRoot' => null,
             'replyTo' => null,
         ]);
         $this->assertNull($page2->json('links.next'));

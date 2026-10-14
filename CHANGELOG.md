@@ -34,8 +34,9 @@ First version.
 - Threads: replies to a message (`POST`/`GET messages/{id}/replies`, `Chat::send(..., thread:)`), kept out of the
   chat's messages, unread count and latest message; messages carry `threadId`, `replyCount` and `lastReplyAt`.
   `GET threads` lists the ones you follow (started, replied, mentioned) with `unreadCount`, and
-  `POST messages/{id}/thread/read` reads one; replies only notify followers and mentions. New migration:
-  `update_chat_messages_for_threads`.
+  `POST messages/{id}/thread/read` reads one; replies only notify followers and mentions. A reply sent with
+  `alsoSendToChat` shows in the chat too (`alsoInChat`, `threadRoot`). The threads list comes with each one's
+  `latestReplies`. New migrations: `update_chat_messages_for_threads`, `update_chat_messages_for_threads_in_chat`.
 - Saved messages: `PUT` / `DELETE messages/{id}/saved` (`Chat::saveMessage()`, `Chat::unsaveMessage()`) and
   `GET saved`, newest first with each message's chat. New migration: `create_chat_saved_messages_table`.
 - Reminders: `PUT messages/{id}/reminder` with `{ remindAt }` (`Chat::remind()`), `DELETE` to remove it, and

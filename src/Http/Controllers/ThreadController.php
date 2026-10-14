@@ -34,7 +34,8 @@ class ThreadController extends Controller
         return MessageResource::collection($replies);
     }
 
-    // { body, attachments[]?, gif?, replyToId? } like a message; it can quote a message of this thread
+    // { body, attachments[]?, gif?, replyToId?, alsoSendToChat? } like a message; it can quote a message of this thread,
+    // and show in the chat too
     public function reply(StoreMessageRequest $request, Message $message): JsonResponse
     {
         Gate::authorize('send', $message->conversation);
@@ -55,7 +56,10 @@ class ThreadController extends Controller
                 ?? throw ValidationException::withMessages(['replyToId' => 'That message isn\'t in this thread.']);
         }
 
-        $reply = $this->chat->send($thread->conversation, $request->user(), $body, $files, $replyTo, gif: $gif, thread: $thread);
+        $reply = $this->chat->send(
+            $thread->conversation, $request->user(), $body, $files, $replyTo,
+            gif: $gif, thread: $thread, alsoInChat: $request->boolean('alsoSendToChat'),
+        );
 
         return (new MessageResource($reply->load(Message::presentationRelations())))->response()->setStatusCode(201);
     }
@@ -81,7 +85,12 @@ class ThreadController extends Controller
                 ->whereRaw("replies.id > coalesce($followers.last_read_reply_id, 0)")
                 ->whereNull('replies.deleted_at')
                 ->where(fn ($query) => $query->whereNull('replies.sender_id')->orWhere('replies.sender_id', '!=', $user->getKey())), 'unread_count')
-            ->with(['thread.conversation', ...array_map(fn (string $relation) => "thread.$relation", Message::presentationRelations())])
+            ->with([
+                'thread.conversation',
+                ...array_map(fn (string $relation) => "thread.$relation", Message::presentationRelations()),
+                // The latest few replies of each, to show with it
+                'thread.latestReplies' => fn ($query) => $query->limit(3)->with(Message::presentationRelations()),
+            ])
             ->orderByDesc("$messages.last_reply_at")
             ->limit((int) config('laravel-chat.pagination.threads', 50))
             ->get()

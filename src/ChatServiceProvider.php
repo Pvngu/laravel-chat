@@ -50,6 +50,7 @@ class ChatServiceProvider extends ServiceProvider
                 __DIR__.'/../database/migrations/create_chat_reminders_table.php' => database_path('migrations/'.date('Y_m_d_His', time() + 1).'_create_chat_reminders_table.php'),
                 __DIR__.'/../database/migrations/create_chat_saved_messages_table.php' => database_path('migrations/'.date('Y_m_d_His', time() + 2).'_create_chat_saved_messages_table.php'),
                 __DIR__.'/../database/migrations/update_chat_messages_for_threads.php' => database_path('migrations/'.date('Y_m_d_His', time() + 3).'_update_chat_messages_for_threads.php'),
+                __DIR__.'/../database/migrations/update_chat_messages_for_threads_in_chat.php' => database_path('migrations/'.date('Y_m_d_His', time() + 4).'_update_chat_messages_for_threads_in_chat.php'),
             ], 'laravel-chat-migrations');
             $this->commands([InstallCommand::class, SendRemindersCommand::class]);
         }

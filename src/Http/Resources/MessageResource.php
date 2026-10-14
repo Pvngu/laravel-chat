@@ -74,6 +74,17 @@ class MessageResource extends JsonResource
             'threadId' => $this->thread_id !== null ? (string) $this->thread_id : null,
             'replyCount' => (int) $this->reply_count,
             'lastReplyAt' => $this->last_reply_at?->toIso8601ZuluString(),
+            // A reply also sent to its chat, with the message whose thread it's in
+            'alsoInChat' => (bool) $this->also_in_chat,
+            'threadRoot' => $this->also_in_chat && $this->thread ? [
+                'messageId' => (string) $this->thread->id,
+                'senderName' => $this->person($this->thread->sender, $this->thread->sender_id)['name'],
+                'text' => match (true) {
+                    $this->thread->trashed() => '',
+                    $this->thread->body === '' && $this->thread->gif !== null => 'GIF',
+                    default => $this->thread->displayText(),
+                },
+            ] : null,
             'replyTo' => $replyTo ? [
                 'messageId' => (string) $replyTo->id,
                 'senderName' => $this->person($replyTo->sender, $replyTo->sender_id)['name'],
