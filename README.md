@@ -32,6 +32,7 @@ Check `config/laravel-chat.php` before migrating:
 - `user_key_type`: `'uuid'`, `'ulid'` or `'string'` if your users table key isn't a big integer.
 - `user_attributes`: which attributes hold the name, email and avatar, and `tenant` (e.g. `'company_id'`) for
   multi-tenant apps: people only see conversations and other people with the same value.
+- `features`: what the chat can do, all on by default (see Features).
 - `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments`,
   `chat_reactions`, `chat_reminders`, `chat_saved_messages` and `chat_thread_followers`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
   are installed.
@@ -122,6 +123,25 @@ Chat::addMember($channel, $newHire, by: $user);              // shows "… added
 Chat::update($channel, ['description' => 'Company news']);   // name, description, isPrivate (channels)
 Chat::setNotifications($channel, $user, 'mentions');         // 'all' | 'mentions' | 'none', optional mute end
 ```
+
+## Features
+
+Each project can turn off what it doesn't need in `config/laravel-chat.php`:
+
+```php
+'features' => [
+    'threads' => false,
+    'reminders' => false,
+    // channels, groups, saved, reactions, replies, forwarding, editing, deleting, pinning, mentions,
+    // attachments, gifs, formatting, files, presence and notifications stay on
+],
+```
+
+A feature that's off has its routes answer 404 (`GET threads`, `POST messages/{id}/reactions`, every `channels/…`
+route…) and its fields refused (`attachments`, `gif`, `replyToId`, `forwardedFromId`; group conversations without
+`groups`); mentions aren't recorded without `mentions`, and nobody is online without `presence`. `GET features` lists
+them all (`{ data: { threads: false, … } }`): vue-chat's `useChatStore` reads it and leaves out what's off, so there's
+nothing to repeat in the frontend. `Features::enabled('threads')` checks one in your own code.
 
 ## Mentions and notifications
 
@@ -314,6 +334,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST | `messages/{id}/thread/read` | You've seen the thread's replies |
 | GET | `threads` | Threads you follow, latest reply first: `{ message, chat, unreadCount, latestReplies }` |
 | GET | `users` | People you can start a conversation with |
+| GET | `features` | What the chat can do here: `{ data: { channels, groups, threads, … } }` (see Features) |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |
 

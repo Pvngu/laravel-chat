@@ -28,6 +28,7 @@ use Pvngu\Chat\Models\Reminder;
 use Pvngu\Chat\Models\SavedMessage;
 use Pvngu\Chat\Models\ThreadFollower;
 use Pvngu\Chat\Support\ChatConfig;
+use Pvngu\Chat\Support\Features;
 use RuntimeException;
 use Throwable;
 
@@ -611,6 +612,9 @@ class ChatManager
     // mention counts once, as named.
     private function syncMentions(Message $message): void
     {
+        if (! Features::enabled('mentions')) {
+            return;
+        }
         preg_match_all(Message::MENTION_PATTERN, $message->body, $named);
         preg_match_all(Message::GROUP_MENTION_PATTERN, $message->body, $groups);
         $tenant = $message->conversation()->value('tenant');

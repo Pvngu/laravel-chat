@@ -15,6 +15,7 @@ use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Policies\ConversationPolicy;
 use Pvngu\Chat\Policies\MessagePolicy;
 use Pvngu\Chat\Support\ChatConfig;
+use Pvngu\Chat\Support\Features;
 
 class ChatServiceProvider extends ServiceProvider
 {
@@ -73,7 +74,7 @@ class ChatServiceProvider extends ServiceProvider
 
             // Presence: everyone in a tenant joins its channel while the chat is open (online), and is told who else is
             $broadcast->channel(ChatConfig::channel('presence.{key}'), function (Model $user, string $key) {
-                if (app(ChatManager::class)->presenceChannel($user) !== ChatConfig::channel("presence.$key")) {
+                if (! Features::enabled('presence') || app(ChatManager::class)->presenceChannel($user) !== ChatConfig::channel("presence.$key")) {
                     return false;
                 }
                 $person = app(ChatUserProvider::class)->present($user);

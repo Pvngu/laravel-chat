@@ -25,6 +25,31 @@ return [
     ],
 
     /*
+    | What the chat can do. Turn off what a project doesn't need: its routes answer 404, its request fields are refused,
+    | and vue-chat (useChatStore, through GET features) leaves it out of the interface.
+    */
+    'features' => [
+        'channels' => true,       // public and private channels, besides conversations
+        'groups' => true,         // group conversations, besides direct messages
+        'threads' => true,        // replies in threads, and the threads you follow
+        'saved' => true,          // saving messages for later
+        'reminders' => true,      // reminders on messages
+        'reactions' => true,      // emoji reactions
+        'replies' => true,        // replying to (quoting) a message
+        'forwarding' => true,     // forwarding messages
+        'editing' => true,        // editing your messages
+        'deleting' => true,       // deleting your messages
+        'pinning' => true,        // pinning messages in a chat
+        'mentions' => true,       // @mentions, @everyone and @here
+        'attachments' => true,    // files and photos
+        'gifs' => true,           // GIFs (see gifs below)
+        'formatting' => true,     // bold, lists, links… in the message box
+        'files' => true,          // a chat's Files tab
+        'presence' => true,       // online, away and offline
+        'notifications' => true,  // notification settings and muting, per chat
+    ],
+
+    /*
     | The type of your users table's primary key, used by the migration: 'bigint', 'uuid', 'ulid' or 'string'.
     */
     'user_key_type' => 'bigint',

@@ -4,6 +4,7 @@ namespace Pvngu\Chat\Http\Requests;
 
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Pvngu\Chat\Support\Features;
 
 class StoreMessageRequest extends FormRequest
 {
@@ -11,15 +12,15 @@ class StoreMessageRequest extends FormRequest
     {
         return [
             'body' => ['nullable', 'string', 'max:10000', 'required_without_all:attachments,gif,forwardedFromId'],
-            'attachments' => ['sometimes', 'array', 'max:'.(int) config('laravel-chat.attachments.max_files', 12)],
+            'attachments' => [...$this->unlessOff('attachments'), 'sometimes', 'array', 'max:'.(int) config('laravel-chat.attachments.max_files', 12)],
             'attachments.*' => ['file', 'max:'.(int) config('laravel-chat.attachments.max_size_kb', 10240)],
-            'replyToId' => ['nullable', 'string', 'regex:/^[0-9]+$/'],
-            'forwardedFromId' => ['nullable', 'string', 'regex:/^[0-9]+$/'],
+            'replyToId' => [...$this->unlessOff('replies'), 'nullable', 'string', 'regex:/^[0-9]+$/'],
+            'forwardedFromId' => [...$this->unlessOff('forwarding'), 'nullable', 'string', 'regex:/^[0-9]+$/'],
             // A reply in a thread that shows in the chat too
             'alsoSendToChat' => ['sometimes', 'boolean'],
 
             // A GIF picked from a provider such as KLIPY; its media must come from the configured hosts
-            'gif' => ['nullable', 'array'],
+            'gif' => [...$this->unlessOff('gifs'), 'nullable', 'array'],
             'gif.provider' => ['required_with:gif', 'string', 'max:32'],
             'gif.id' => ['required_with:gif', 'string', 'max:191'],
             'gif.title' => ['nullable', 'string', 'max:255'],
@@ -29,6 +30,13 @@ class StoreMessageRequest extends FormRequest
             'gif.image' => ['required_with:gif', 'string', 'max:2048', $this->gifMedia(...)],
             'gif.still' => ['required_with:gif', 'string', 'max:2048', $this->gifMedia(...)],
         ];
+    }
+
+    // Refused when its feature is off (laravel-chat.features)
+    /** @return list<string> */
+    private function unlessOff(string $feature): array
+    {
+        return Features::enabled($feature) ? [] : ['prohibited'];
     }
 
     // An HTTPS URL on one of laravel-chat.gifs.media_hosts, so messages can't embed images from anywhere else
