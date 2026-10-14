@@ -21,7 +21,7 @@ Requires PHP 8.2+ and Laravel 12 or 13.
 
 ```bash
 composer require pvngu/laravel-chat
-php artisan chat:install     # publishes config/laravel-chat.php and the migration
+php artisan chat:install     # publishes config/laravel-chat.php and the migrations
 php artisan migrate
 ```
 
@@ -32,8 +32,8 @@ Check `config/laravel-chat.php` before migrating:
 - `user_key_type`: `'uuid'`, `'ulid'` or `'string'` if your users table key isn't a big integer.
 - `user_attributes`: which attributes hold the name, email and avatar, and `tenant` (e.g. `'company_id'`) for
   multi-tenant apps: people only see conversations and other people with the same value.
-- `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments` and
-  `chat_reactions`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
+- `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments`,
+  `chat_reactions` and `chat_reminders`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
   are installed.
 
 ### Frontend
@@ -195,6 +195,26 @@ When the last admin leaves, the member they choose takes over (`DELETE {kind}/{i
 `{ successorId }`), or else whoever has been in it longest; the chat says so ("… made … an admin"). Everyone sees
 `isAdmin`, `createdAt` and `createdBy` on conversations and channels; direct messages have no admins or settings.
 
+## Reminders
+
+Anyone can ask to be reminded of a message: `PUT messages/{id}/reminder` with `{ remindAt }` (or `Chat::remind()`),
+one per message, a new time replacing the old one. `GET reminders` lists yours still to come, and
+`DELETE messages/{id}/reminder` removes one.
+
+At that time a queued job (delayed until then) fires `Pvngu\Chat\Events\ReminderDue` with the reminder, its
+`message` and `user`. The package doesn't notify anyone itself: listen for it and send a notification, an email or a
+push. A reminder whose message was deleted, or whose chat they can't see anymore, is dropped instead. Reminders need a
+queue worker; if your queue driver can't delay jobs that long (SQS stops at 15 minutes) or jobs may get lost, schedule
+the catch-up command too:
+
+```php
+// routes/console.php
+Schedule::command('chat:send-reminders')->everyMinute();
+```
+
+Upgrading from an earlier version: run `php artisan chat:install` again (or publish `laravel-chat-migrations`) and keep
+only the new `create_chat_reminders_table` migration, then `php artisan migrate`.
+
 ## GIFs
 
 Messages can carry a GIF picked in vue-chat's GIF picker (`createKlipyGifs()`). The API accepts `gif` (`provider`,
@@ -252,6 +272,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | PATCH / DELETE | `messages/{id}` | Edit `{ body }`; delete |
 | POST / DELETE | `messages/{id}/reactions`, `/reactions/{emoji}` | `{ emoji }` |
 | POST | `messages/{id}/pin` | `{ pinned }` |
+| PUT / DELETE | `messages/{id}/reminder` | Remind you: `{ remindAt }` (a time to come, within a year); remove it |
+| GET | `reminders` | Your reminders still to come: `{ messageId, remindAt, chat: { kind, id } }` |
 | GET | `users` | People you can start a conversation with |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |

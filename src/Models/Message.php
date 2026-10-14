@@ -102,6 +102,12 @@ class Message extends ChatModel
         return $this->hasMany(Attachment::class);
     }
 
+    /** @return HasMany<Reminder, $this> */
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(Reminder::class);
+    }
+
     /** @return HasMany<Reaction, $this> */
     public function reactions(): HasMany
     {

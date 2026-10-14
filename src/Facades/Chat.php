@@ -18,6 +18,10 @@ use Pvngu\Chat\ChatManager;
  * @method static \Pvngu\Chat\Models\Participant addMember(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, ?\Illuminate\Database\Eloquent\Model $by = null)
  * @method static void removeMember(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, ?\Illuminate\Database\Eloquent\Model $by = null, ?\Illuminate\Database\Eloquent\Model $successor = null)
  * @method static void setRole(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user, string $role, ?\Illuminate\Database\Eloquent\Model $by = null)
+ * @method static \Pvngu\Chat\Models\Reminder remind(\Illuminate\Database\Eloquent\Model $user, \Pvngu\Chat\Models\Message $message, \DateTimeInterface $at)
+ * @method static void forgetReminder(\Illuminate\Database\Eloquent\Model $user, \Pvngu\Chat\Models\Message $message)
+ * @method static bool sendReminder(\Pvngu\Chat\Models\Reminder $reminder)
+ * @method static int sendDueReminders()
  * @method static bool isLastAdmin(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $user)
  *
  * @see ChatManager

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Pvngu\Chat\Console\InstallCommand;
+use Pvngu\Chat\Console\SendRemindersCommand;
 use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Models\Conversation;
@@ -45,8 +46,10 @@ class ChatServiceProvider extends ServiceProvider
             // Timestamped like the app's own migrations, so it runs after the users table exists
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations/create_chat_tables.php' => database_path('migrations/'.date('Y_m_d_His').'_create_chat_tables.php'),
+                // A second later, so it runs after the tables it refers to
+                __DIR__.'/../database/migrations/create_chat_reminders_table.php' => database_path('migrations/'.date('Y_m_d_His', time() + 1).'_create_chat_reminders_table.php'),
             ], 'laravel-chat-migrations');
-            $this->commands([InstallCommand::class]);
+            $this->commands([InstallCommand::class, SendRemindersCommand::class]);
         }
     }
 

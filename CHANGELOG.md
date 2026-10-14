@@ -31,6 +31,9 @@ First version.
   and only admins add people to a private channel. The creator always stays an admin that others can't remove or
   demote. The last admin leaving hands over to the member they choose
   (`successorId`) or the longest-standing one. Role changes are membership lines (`promoted`, `demoted`).
+- Reminders: `PUT messages/{id}/reminder` with `{ remindAt }` (`Chat::remind()`), `DELETE` to remove it, and
+  `GET reminders`. A delayed queued job fires `ReminderDue` at that time (`chat:send-reminders` catches up); apps
+  listen for it to notify the person. New migration: `create_chat_reminders_table`.
 - Files: `GET {kind}/{id}/files` lists a chat's photos and videos (`type=media`) or other files (`type=files`),
   newest first, with who sent each one, when, and its message, for vue-chat's Files tab
   (`laravel-chat.pagination.files`).

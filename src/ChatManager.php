@@ -8,6 +8,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Contracts\ChatUserProvider;
@@ -16,11 +17,14 @@ use Pvngu\Chat\Events\ConversationUpdated;
 use Pvngu\Chat\Events\MessageDeleted;
 use Pvngu\Chat\Events\MessageSent;
 use Pvngu\Chat\Events\MessageUpdated;
+use Pvngu\Chat\Events\ReminderDue;
+use Pvngu\Chat\Jobs\SendReminder;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Models\ConversationType;
 use Pvngu\Chat\Models\Mention;
 use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Participant;
+use Pvngu\Chat\Models\Reminder;
 use Pvngu\Chat\Support\ChatConfig;
 use RuntimeException;
 use Throwable;
@@ -334,6 +338,70 @@ class ChatManager
         MessageUpdated::dispatch($message);
 
         return $message;
+    }
+
+    // ── Reminders ───────────────────────────────────────────────────────────
+
+    // Remind them of a message at a time. One reminder per person and message: a new time replaces the old one.
+    // A queued job, delayed until then, fires ReminderDue.
+    public function remind(Model $user, Message $message, DateTimeInterface $at): Reminder
+    {
+        /** @var Reminder $reminder */
+        $reminder = Reminder::query()->updateOrCreate(
+            ['user_id' => $user->getKey(), 'message_id' => $message->id],
+            ['remind_at' => $at, 'sent_at' => null],
+        );
+        SendReminder::dispatch($reminder->id)->delay($reminder->remind_at);
+
+        return $reminder;
+    }
+
+    public function forgetReminder(Model $user, Message $message): void
+    {
+        Reminder::query()->where('user_id', $user->getKey())->where('message_id', $message->id)->delete();
+    }
+
+    // Fires ReminderDue when its time has come. A reminder whose message was deleted, or whose chat they can't see
+    // anymore, is dropped instead. Returns whether it was sent.
+    public function sendReminder(Reminder $reminder): bool
+    {
+        if ($reminder->sent_at !== null || $reminder->remind_at->isFuture()) {
+            return false; // sent, or moved to a later time (its own job comes then)
+        }
+
+        $message = $reminder->message;
+        $user = $reminder->user;
+        if (! $message || ! $user || $message->trashed() || Gate::forUser($user)->denies('view', $message->conversation)) {
+            $reminder->delete();
+
+            return false;
+        }
+
+        // Claimed first, so a second worker (or chat:send-reminders) doesn't send it again
+        $claimed = Reminder::query()->whereKey($reminder->id)->whereNull('sent_at')->update(['sent_at' => now()]);
+        if ($claimed === 0) {
+            return false;
+        }
+
+        ReminderDue::dispatch($reminder->refresh());
+
+        return true;
+    }
+
+    // Every reminder that's due and not sent: the queued jobs send them on time; this catches up on any they missed
+    public function sendDueReminders(): int
+    {
+        $sent = 0;
+        Reminder::query()
+            ->whereNull('sent_at')
+            ->where('remind_at', '<=', now())
+            ->with(['message.conversation', 'user'])
+            ->orderBy('id')
+            ->each(function (Reminder $reminder) use (&$sent) {
+                $sent += $this->sendReminder($reminder) ? 1 : 0;
+            });
+
+        return $sent;
     }
 
     // ── Per-person state ────────────────────────────────────────────────────
