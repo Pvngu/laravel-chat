@@ -43,6 +43,7 @@ return [
         'messages' => 50,
         'files' => 30,              // a chat's Files tab
         'saved' => 200,             // saved messages: the newest this many
+        'threads' => 50,            // the threads you follow: the latest this many
     ],
 
     'attachments' => [

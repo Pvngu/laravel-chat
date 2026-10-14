@@ -70,6 +70,10 @@ class MessageResource extends JsonResource
                     'name' => $this->person($mention->user, $mention->user_id)['name'],
                 ])
                 ->values(),
+            // A reply's thread, or a thread's replies so far
+            'threadId' => $this->thread_id !== null ? (string) $this->thread_id : null,
+            'replyCount' => (int) $this->reply_count,
+            'lastReplyAt' => $this->last_reply_at?->toIso8601ZuluString(),
             'replyTo' => $replyTo ? [
                 'messageId' => (string) $replyTo->id,
                 'senderName' => $this->person($replyTo->sender, $replyTo->sender_id)['name'],

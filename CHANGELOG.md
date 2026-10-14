@@ -31,6 +31,11 @@ First version.
   and only admins add people to a private channel. The creator always stays an admin that others can't remove or
   demote. The last admin leaving hands over to the member they choose
   (`successorId`) or the longest-standing one. Role changes are membership lines (`promoted`, `demoted`).
+- Threads: replies to a message (`POST`/`GET messages/{id}/replies`, `Chat::send(..., thread:)`), kept out of the
+  chat's messages, unread count and latest message; messages carry `threadId`, `replyCount` and `lastReplyAt`.
+  `GET threads` lists the ones you follow (started, replied, mentioned) with `unreadCount`, and
+  `POST messages/{id}/thread/read` reads one; replies only notify followers and mentions. New migration:
+  `update_chat_messages_for_threads`.
 - Saved messages: `PUT` / `DELETE messages/{id}/saved` (`Chat::saveMessage()`, `Chat::unsaveMessage()`) and
   `GET saved`, newest first with each message's chat. New migration: `create_chat_saved_messages_table`.
 - Reminders: `PUT messages/{id}/reminder` with `{ remindAt }` (`Chat::remind()`), `DELETE` to remove it, and

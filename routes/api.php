@@ -11,6 +11,7 @@ use Pvngu\Chat\Http\Controllers\PresenceController;
 use Pvngu\Chat\Http\Controllers\ReactionController;
 use Pvngu\Chat\Http\Controllers\ReminderController;
 use Pvngu\Chat\Http\Controllers\SavedMessageController;
+use Pvngu\Chat\Http\Controllers\ThreadController;
 use Pvngu\Chat\Http\Controllers\UserController;
 use Pvngu\Chat\Http\Middleware\RecordPresence;
 
@@ -64,6 +65,10 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         Route::put('messages/{message}/saved', [SavedMessageController::class, 'update'])->name('messages.saved.update');
         Route::delete('messages/{message}/saved', [SavedMessageController::class, 'destroy'])->name('messages.saved.destroy');
         Route::get('saved', [SavedMessageController::class, 'index'])->name('saved.index');
+        Route::get('messages/{message}/replies', [ThreadController::class, 'replies'])->name('messages.replies.index');
+        Route::post('messages/{message}/replies', [ThreadController::class, 'reply'])->name('messages.replies.store');
+        Route::post('messages/{message}/thread/read', [ThreadController::class, 'read'])->name('messages.thread.read');
+        Route::get('threads', [ThreadController::class, 'index'])->name('threads.index');
 
         Route::get('users', [UserController::class, 'index'])->name('users.index');
         Route::get('presence', [PresenceController::class, 'show'])->name('presence.show');

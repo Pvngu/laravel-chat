@@ -19,6 +19,9 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property int|string|null $event_user_id who it happened to
  * @property int|null $reply_to_id
  * @property int|null $forwarded_from_id
+ * @property int|null $thread_id the message whose thread it's a reply in
+ * @property int $reply_count a thread's replies
+ * @property Carbon|null $last_reply_at
  * @property Carbon|null $edited_at
  * @property Carbon|null $pinned_at
  * @property Carbon $created_at
@@ -34,6 +37,7 @@ class Message extends ChatModel
         return [
             'edited_at' => 'datetime',
             'pinned_at' => 'datetime',
+            'last_reply_at' => 'datetime',
             'gif' => 'array',
         ];
     }
@@ -100,6 +104,30 @@ class Message extends ChatModel
     public function attachments(): HasMany
     {
         return $this->hasMany(Attachment::class);
+    }
+
+    // The message a reply is in the thread of
+    /** @return BelongsTo<Message, $this> */
+    public function thread(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'thread_id');
+    }
+
+    /** @return HasMany<Message, $this> */
+    public function replies(): HasMany
+    {
+        return $this->hasMany(Message::class, 'thread_id');
+    }
+
+    /** @return HasMany<ThreadFollower, $this> */
+    public function followers(): HasMany
+    {
+        return $this->hasMany(ThreadFollower::class, 'thread_id');
+    }
+
+    public function isReply(): bool
+    {
+        return $this->thread_id !== null;
     }
 
     /** @return HasMany<Reminder, $this> */

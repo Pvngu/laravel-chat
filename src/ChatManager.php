@@ -26,6 +26,7 @@ use Pvngu\Chat\Models\Message;
 use Pvngu\Chat\Models\Participant;
 use Pvngu\Chat\Models\Reminder;
 use Pvngu\Chat\Models\SavedMessage;
+use Pvngu\Chat\Models\ThreadFollower;
 use Pvngu\Chat\Support\ChatConfig;
 use RuntimeException;
 use Throwable;
@@ -232,7 +233,9 @@ class ChatManager
     // ── Messages ────────────────────────────────────────────────────────────
 
     /**
-     * Sends a message, storing any uploaded files on the configured disk. Posting in a public channel joins it.
+     * Sends a message, storing any uploaded files on the configured disk. Posting in a public channel joins it. With
+     * $thread it's a reply in that message's thread: it stays out of the chat itself (and its unread count), and
+     * whoever started the thread, replied or is mentioned follows it.
      *
      * @param  array<int, UploadedFile>  $files
      */
@@ -244,13 +247,14 @@ class ChatManager
         ?Message $replyTo = null,
         ?Message $forwardedFrom = null,
         ?array $gif = null, // see MessageResource for the shape; the request validates where its media comes from
+        ?Message $thread = null,
     ): Message {
         $disk = config('laravel-chat.attachments.disk') ?? config('filesystems.default');
         $directory = trim((string) config('laravel-chat.attachments.directory', 'chat-attachments'), '/');
         $stored = [];
 
         try {
-            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $disk, $directory, &$stored) {
+            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $thread, $disk, $directory, &$stored) {
                 $participant = $this->addParticipant($conversation, $sender, notify: false);
                 // Posting in a public channel joins it
                 if ($participant->wasRecentlyCreated) {
@@ -264,6 +268,7 @@ class ChatManager
                     'gif' => $gif,
                     'reply_to_id' => $replyTo?->id,
                     'forwarded_from_id' => $forwardedFrom?->id,
+                    'thread_id' => $thread?->id,
                 ]);
 
                 $this->syncMentions($message);
@@ -283,6 +288,12 @@ class ChatManager
                     ]);
                 }
 
+                if ($thread !== null) {
+                    $this->threadReplied($thread, $message);
+
+                    return $message;
+                }
+
                 $conversation->forceFill(['last_message_at' => $message->created_at])->save();
                 // Your own message isn't unread for you, and a new message brings an archived chat back
                 $participant->forceFill(['last_read_message_id' => $message->id])->save();
@@ -298,6 +309,9 @@ class ChatManager
         }
 
         MessageSent::dispatch($message);
+        if ($thread !== null) {
+            MessageUpdated::dispatch($thread); // its reply count and last reply
+        }
 
         return $message;
     }
@@ -317,6 +331,13 @@ class ChatManager
         $kind = $message->conversation->isChannel() ? 'channel' : 'conversation';
         $message->delete();
         MessageDeleted::dispatch($message->conversation_id, $kind, (string) $message->id);
+
+        // A reply: its thread counts one less
+        if ($message->thread_id !== null && ($thread = $message->thread) !== null) {
+            $replies = $thread->replies();
+            $thread->forceFill(['reply_count' => $replies->count(), 'last_reply_at' => $replies->max('created_at')])->save();
+            MessageUpdated::dispatch($thread);
+        }
     }
 
     public function react(Message $message, Model $user, string $emoji): Message
@@ -405,6 +426,43 @@ class ChatManager
         return $sent;
     }
 
+    // ── Threads ─────────────────────────────────────────────────────────────
+
+    // Follow a thread (its replies show in your Threads, unread until you've seen them)
+    public function followThread(Message $thread, int|string $userKey, ?int $readUpTo = null): ThreadFollower
+    {
+        /** @var ThreadFollower $follower */
+        $follower = ThreadFollower::query()->firstOrCreate(['user_id' => $userKey, 'thread_id' => $thread->id]);
+        if ($readUpTo !== null && $readUpTo > (int) $follower->last_read_reply_id) {
+            $follower->forceFill(['last_read_reply_id' => $readUpTo])->save();
+        }
+
+        return $follower;
+    }
+
+    // You've seen every reply so far
+    public function markThreadRead(Message $thread, Model $user): void
+    {
+        ThreadFollower::query()
+            ->where('thread_id', $thread->id)
+            ->where('user_id', $user->getKey())
+            ->update(['last_read_reply_id' => $thread->replies()->max('id')]);
+    }
+
+    // A reply arrived: count it, and the people in the thread follow it (whoever started it, the replier, who it mentions)
+    private function threadReplied(Message $thread, Message $reply): void
+    {
+        $thread->forceFill(['reply_count' => $thread->reply_count + 1, 'last_reply_at' => $reply->created_at])->save();
+
+        if ($thread->sender_id !== null) {
+            $this->followThread($thread, $thread->sender_id);
+        }
+        $this->followThread($thread, $reply->sender_id, readUpTo: $reply->id);
+        foreach ($reply->personMentions()->pluck('user_id') as $key) {
+            $this->followThread($thread, $key);
+        }
+    }
+
     // ── Saved for later ─────────────────────────────────────────────────────
 
     public function saveMessage(Model $user, Message $message): SavedMessage
@@ -473,9 +531,17 @@ class ChatManager
         }
 
         $mentioned = $message->mentions()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
+        // A reply in a thread: only the people following it, and anyone it mentions
+        $following = $message->thread_id === null ? null : ThreadFollower::query()
+            ->where('thread_id', $message->thread_id)
+            ->pluck('user_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
 
         return $message->conversation->participants()->with('user')->get()
             ->filter(fn (Participant $participant) => (string) $participant->user_id !== (string) $message->sender_id)
+            ->filter(fn (Participant $participant) => $following === null
+                || in_array((string) $participant->user_id, [...$following, ...$mentioned], true))
             ->filter(fn (Participant $participant) => $participant->wantsNotification(in_array((string) $participant->user_id, $mentioned, true)))
             ->map(fn (Participant $participant) => $participant->user)
             ->filter()

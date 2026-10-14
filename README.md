@@ -33,7 +33,7 @@ Check `config/laravel-chat.php` before migrating:
 - `user_attributes`: which attributes hold the name, email and avatar, and `tenant` (e.g. `'company_id'`) for
   multi-tenant apps: people only see conversations and other people with the same value.
 - `table_prefix`: tables are `chat_conversations`, `chat_participants`, `chat_messages`, `chat_attachments`,
-  `chat_reactions`, `chat_reminders` and `chat_saved_messages`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
+  `chat_reactions`, `chat_reminders`, `chat_saved_messages` and `chat_thread_followers`. [musonza/chat](https://github.com/musonza/chat) uses the same prefix; change one of them if both
   are installed.
 
 ### Frontend
@@ -219,8 +219,21 @@ Anyone can save a message for later: `PUT messages/{id}/saved` (or `Chat::saveMe
 show it, its chat (`kind`, `id`, `name`, `isDirect`) and `savedAt`. Deleted messages, and those of chats you can't see
 anymore, drop out.
 
+## Threads
+
+Any message in a chat can have a thread of replies: `POST messages/{id}/replies` (same fields as a message, or
+`Chat::send(..., thread: $message)`), and `GET messages/{id}/replies` pages through them like a chat's messages.
+Replies stay out of the chat itself: not in its messages, its unread count or its latest message. The message they hang
+off says `replyCount` and `lastReplyAt`, and is broadcast again (`.message.updated`) when they change; each reply is
+broadcast as `.message.sent` with its `threadId`.
+
+Whoever started a thread, replied to it or is mentioned in it follows it: `GET threads` lists the threads you follow,
+latest reply first, with each one's `unreadCount` (`POST messages/{id}/thread/read` when you've seen them). Only
+followers, and anyone a reply mentions, are among `Chat::recipients()` for a reply.
+
 Upgrading from an earlier version: run `php artisan chat:install` again (or publish `laravel-chat-migrations`) and keep
-only the migrations you don't have yet (`create_chat_reminders_table`, `create_chat_saved_messages_table`), then
+only the migrations you don't have yet (`create_chat_reminders_table`, `create_chat_saved_messages_table`,
+`update_chat_messages_for_threads`), then
 `php artisan migrate`.
 
 ## GIFs
@@ -284,6 +297,9 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | GET | `reminders` | Your reminders still to come: `{ messageId, remindAt, chat: { kind, id } }` |
 | PUT / DELETE | `messages/{id}/saved` | Save a message for later; unsave it |
 | GET | `saved` | Your saved messages, newest first: `{ message, chat: { kind, id, name, isDirect }, savedAt }` |
+| GET / POST | `messages/{id}/replies?page=` | A thread's replies (page 1 is the latest); reply like a message |
+| POST | `messages/{id}/thread/read` | You've seen the thread's replies |
+| GET | `threads` | Threads you follow, latest reply first: `{ message, chat, unreadCount }` |
 | GET | `users` | People you can start a conversation with |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |

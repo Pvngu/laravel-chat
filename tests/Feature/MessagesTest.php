@@ -59,6 +59,9 @@ class MessagesTest extends TestCase
             'gif' => null,
             'event' => null,
             'mentions' => [],
+            'threadId' => null,
+            'replyCount' => 0,
+            'lastReplyAt' => null,
             'replyTo' => null,
         ]);
         $this->assertNull($page2->json('links.next'));

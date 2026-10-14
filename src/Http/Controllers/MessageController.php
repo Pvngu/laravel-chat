@@ -22,6 +22,7 @@ class MessageController extends Controller
         Gate::authorize('view', $conversation);
 
         $messages = $conversation->messages()
+            ->whereNull('thread_id') // replies are in their threads
             ->with(Message::presentationRelations())
             ->orderByDesc('id')
             ->simplePaginate((int) config('laravel-chat.pagination.messages', 50))
