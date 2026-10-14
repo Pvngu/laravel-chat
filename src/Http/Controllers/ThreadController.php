@@ -89,7 +89,9 @@ class ThreadController extends Controller
                 'thread.conversation',
                 ...array_map(fn (string $relation) => "thread.$relation", Message::presentationRelations()),
                 // The latest few replies of each, to show with it
-                'thread.latestReplies' => fn ($query) => $query->limit(3)->with(Message::presentationRelations()),
+                'thread.latestReplies' => fn ($query) => $query
+                    ->limit((int) (config('laravel-chat.pagination.thread_replies') ?? 5))
+                    ->with(Message::presentationRelations()),
             ])
             ->orderByDesc("$messages.last_reply_at")
             ->limit((int) config('laravel-chat.pagination.threads', 50))

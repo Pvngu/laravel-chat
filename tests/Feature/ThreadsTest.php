@@ -138,6 +138,7 @@ class ThreadsTest extends TestCase
 
     public function test_the_threads_you_follow_come_with_their_latest_replies()
     {
+        config(['laravel-chat.pagination.thread_replies' => 3]);
         foreach (['One', 'Two', 'Three', 'Four'] as $text) {
             Chat::send($this->channel, $this->john, $text, thread: $this->root);
         }
@@ -149,6 +150,13 @@ class ThreadsTest extends TestCase
             ->assertJsonPath('data.0.message.text', 'Another thread')
             ->assertJsonPath('data.0.latestReplies.*.text', ['Its only reply'])
             ->assertJsonPath('data.1.latestReplies.*.text', ['Two', 'Three', 'Four']); // the latest three, oldest first
+
+        // Five by default
+        config(['laravel-chat.pagination.thread_replies' => null]);
+        Chat::send($this->channel, $this->john, 'Five', thread: $this->root);
+        Chat::send($this->channel, $this->john, 'Six', thread: $this->root);
+        $this->actingAs($this->ann)->getJson('/api/chat/threads')
+            ->assertJsonPath('data.0.latestReplies.*.text', ['Two', 'Three', 'Four', 'Five', 'Six']);
     }
 
     public function test_deleting_a_reply_counts_it_out()

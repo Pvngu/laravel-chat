@@ -232,7 +232,7 @@ too, counting there like any message: it says `alsoInChat` and comes with `threa
 `text`) so the chat can show what it replies to.
 
 Whoever started a thread, replied to it or is mentioned in it follows it: `GET threads` lists the threads you follow,
-latest reply first, with each one's `unreadCount` and `latestReplies` (up to three, oldest first;
+latest reply first, with each one's `unreadCount` and `latestReplies` (up to `pagination.thread_replies`, five by default, oldest first;
 `POST messages/{id}/thread/read` when you've seen them). Only followers, and anyone a reply mentions, are among
 `Chat::recipients()` for a reply that stays in its thread.
 
