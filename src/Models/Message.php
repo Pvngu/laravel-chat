@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Support\ChatConfig;
+use Pvngu\Chat\Support\Formatting;
 
 /**
  * @property int $id
@@ -164,11 +165,13 @@ class Message extends ChatModel
     // Everyone in the chat (`<!everyone>`), or everyone online at the time (`<!here>`)
     public const GROUP_MENTION_PATTERN = '/<!(everyone|here)>/';
 
-    // The text as people read it, with mentions as "@Name" (from the loaded person mentions), "@everyone" and "@here"
+    // The text as people read it: no formatting markers, mentions as "@Name" (from the loaded person mentions),
+    // "@everyone" and "@here"
     public function displayText(): string
     {
-        if (! str_contains($this->body, '<@') && ! str_contains($this->body, '<!')) {
-            return $this->body;
+        $text = Formatting::plain($this->body);
+        if (! str_contains($text, '<@') && ! str_contains($text, '<!')) {
+            return $text;
         }
         $users = app(ChatUserProvider::class);
         $names = $this->personMentions
@@ -178,7 +181,7 @@ class Message extends ChatModel
         $text = (string) preg_replace_callback(
             self::MENTION_PATTERN,
             fn (array $match) => '@'.($names[$match[1]] ?? 'unknown'),
-            $this->body,
+            $text,
         );
 
         return (string) preg_replace(self::GROUP_MENTION_PATTERN, '@$1', $text);

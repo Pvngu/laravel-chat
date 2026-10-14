@@ -136,6 +136,14 @@ as "@Name" in previews and reply quotes.
 
 `@here` reaches the people who are online, not away (see Presence).
 
+## Formatting
+
+Messages keep the formatting vue-chat's message box writes as markers in their text: `**bold**`, `_italic_`,
+`__underline__`, `~~strikethrough~~`, `` `code` ``, `[text](https://link)`, `> ` quotes, `- ` and `1. ` lists and
+```` ``` ```` code blocks. `text` returns them as written, for the chat to show formatted; previews, reply quotes and
+`Message::displayText()` (what notifications read) leave the markers out. `Formatting::plain($text)` does the same
+for your own uses.
+
 ## Presence
 
 Each person is online, away or offline, shown as green, yellow and gray dots in vue-chat:

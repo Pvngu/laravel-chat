@@ -18,6 +18,8 @@ First version.
 - Mentions (`<@publicId>` in the text): recorded per message, returned as `mentions`, counted unread per chat
   (`mentionCount`) and shown by name in previews and reply quotes. `<!everyone>` and `<!here>` mention everyone in
   the chat, or everyone online.
+- Formatting: messages keep vue-chat's formatting markers (bold, italic, underline, strikethrough, code, links,
+  quotes, lists, code blocks); previews, reply quotes and `displayText()` read without them (`Formatting::plain()`).
 - Membership lines: joining, leaving, adding and removing people post a line in the chat (`event` on messages,
   `Chat::addMember()`, `Chat::removeMember()`); they don't count as unread or notify anyone.
 - Presence: online, away and offline. A presence channel per tenant (joining it is coming online), heartbeats with
