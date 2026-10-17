@@ -17,7 +17,7 @@ class ConversationsTest extends TestCase
         Carbon::setTestNow('2026-03-10 09:00:00');
         $withJohn = $this->directBetween($ann, $john);
         Chat::send($withJohn, $john, 'Hi Ann');
-        Chat::send($withJohn, $john, 'Lunch?');
+        $lunch = Chat::send($withJohn, $john, 'Lunch?');
 
         Carbon::setTestNow('2026-03-10 10:00:00');
         $group = Chat::group($ann, [$john, $sara], 'Design Team');
@@ -41,6 +41,7 @@ class ConversationsTest extends TestCase
                 ['id' => (string) $john->id, 'name' => 'John Doe', 'email' => 'john.doe@example.com', 'avatarUrl' => null],
             ],
             'lastMessage' => [
+                'id' => (string) $lunch->id, // unreadCount includes it
                 'text' => 'Lunch?',
                 'sentAt' => '2026-03-10T09:00:00Z',
                 'sender' => ['id' => (string) $john->id, 'name' => 'John Doe', 'email' => 'john.doe@example.com', 'avatarUrl' => null],
@@ -148,6 +149,22 @@ class ConversationsTest extends TestCase
 
         Chat::send($conversation, $john, 'Still there?');
         $this->actingAs($ann)->getJson('/api/chat/conversations')->assertJsonCount(1, 'data');
+    }
+
+    public function test_starting_a_direct_message_you_archived_brings_it_back_with_its_history(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $direct = $this->directBetween($ann, $john);
+        Chat::send($direct, $john, 'Hi Ann');
+        $this->actingAs($ann)->postJson("/api/chat/conversations/{$direct->id}/archive")->assertNoContent();
+
+        $this->actingAs($ann)
+            ->postJson('/api/chat/conversations', ['participantIds' => [(string) $john->id], 'isDirect' => true])
+            ->assertOk()
+            ->assertJsonPath('data.id', $direct->id)
+            ->assertJsonPath('data.lastMessage.text', 'Hi Ann');
+        $this->actingAs($ann)->getJson('/api/chat/conversations')->assertJsonPath('data.0.id', $direct->id);
     }
 
     public function test_reading_clears_the_unread_count(): void

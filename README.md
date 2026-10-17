@@ -85,6 +85,12 @@ class ChatUsers extends DefaultChatUserProvider
         return $user->xid;
     }
 
+    // The same for someone whose account was deleted (their messages stay)
+    public function publicIdForKey(int|string $key): string
+    {
+        return Hashids::encode($key);
+    }
+
     public function find(string $publicId): ?Model
     {
         return User::query()->find(Hashids::decode($publicId)[0] ?? null);
@@ -103,8 +109,12 @@ class ChatUsers extends DefaultChatUserProvider
 }
 ```
 
-The methods are `publicId()`, `find()`, `present()` (name, email, avatar), `tenant()` and `available()`; see
-`Pvngu\Chat\Contracts\ChatUserProvider`.
+The methods are `publicId()`, `publicIdForKey()`, `find()`, `present()` (name, email, avatar), `tenant()` and
+`available()`; see `Pvngu\Chat\Contracts\ChatUserProvider`. `publicIdForKey()` gives the public id from the key
+alone, for people whose account was deleted but whose messages, reactions and mentions remain (they show without a
+name); with hashed ids, override it too, or the browser gets the raw key. `find()` decides who can be added to a chat
+or messaged; people already in one stay there (listed, and removable or demoted by its admins) even when it no longer
+finds them, e.g. a disabled account, until they're removed.
 
 ## Using it from code
 
@@ -148,13 +158,29 @@ nothing to repeat in the frontend. `Features::enabled('threads')` checks one in 
 A mention is `<@publicId>` in a message's text (the id your `ChatUserProvider` gives the person), which vue-chat's
 message box writes when someone picks a name after `@`. The package records who each message mentions (people in the
 same tenant), returns them as `mentions: [{ id, name }]`, counts unread ones per chat (`mentionCount`), and shows them
-as "@Name" in previews and reply quotes.
+as "@Name" in previews and reply quotes. A mention in a thread reply counts in its thread (the thread's unread
+count), not in the chat's `mentionCount`, unless the reply was sent to the chat too.
 
 `<!everyone>` mentions everyone else in the chat and `<!here>` everyone else who's online, shown as "@everyone" and
 "@here". They count as a mention for each of those people (unread counts, notifications) without being listed in
 `mentions`, so a message to a large channel stays small.
 
 `@here` reaches the people who are online, not away (see Presence).
+
+## Unread totals
+
+For a badge outside the chat (your app's menu, a tab title), `GET unread` says what the signed-in person's chat
+sidebar badges add up to: `{ data: { chats: 3, mentions: 1 } }`, how many chats show a badge and how many unread
+mentions those badges count. It follows vue-chat's rules (`unreadBadge`): a muted chat (`none`, or a `mutedUntil`
+still to come) shows nothing, unread mentions always show, and other unread messages only in a chat set to `all`.
+Like the sidebar, it leaves out archived conversations, public channels the person hasn't joined and, with the
+`channels` feature off, every channel. It's one query however many chats there are, and asking doesn't count as being
+around in the chat (see Presence). From code: `Chat::unread($user)`.
+
+Each conversation's `lastMessage.id` (and each channel's `lastMessageId`) is the latest message its `unreadCount`
+can include. A chat described just after a message was sent (e.g. `ConversationJoined`, which is rendered when the
+queue gets to it) already counts that message, so a client that also receives its `.message.sent` shouldn't count it
+again: vue-chat's store skips any message up to that id.
 
 ## Formatting
 
@@ -178,8 +204,9 @@ Each person is online, away or offline, shown as green, yellow and gray dots in 
   joined.
 
 The default `CachePresence` keeps what each connection (Echo socket) last reported for two minutes (`presence.ttl`),
-so a closed tab drops out on its own; any chat request also counts as being around. If your app already tracks
-presence, implement `Pvngu\Chat\Contracts\ChatPresence` (`touch()` and `statuses()`) and set `presence.driver`.
+so a closed tab drops out on its own; any chat request (but `GET unread`) also counts as being around. If your app
+already tracks presence, implement `Pvngu\Chat\Contracts\ChatPresence` (`touch()` and `statuses()`) and set
+`presence.driver`.
 
 Each person chooses how they hear about a chat: every message (`all`, the default), only mentions (`mentions`), or
 nothing (`none`), plus an optional `mutedUntil` to pause it for a while. The package doesn't send notifications
@@ -195,6 +222,12 @@ Event::listen(function (MessageSent $event) {
 
 `Chat::recipients($message)` is everyone in the chat but the sender, minus people who muted it or follow only
 mentions and weren't mentioned.
+
+Times from the browser (`mutedUntil`, `remindAt`, sent as UTC "…Z" strings) are stored as UTC in `DATETIME` columns
+(`Pvngu\Chat\Casts\UtcDatetime`) and read back on the app's clock, so they mean the same instant whatever
+`config('app.timezone')` is, the night the clocks go back included. Installs that published the migrations before
+0.1.0 have `timestamp` columns holding the app's wall time: change them to `dateTime` and convert existing values to
+UTC (nothing to do in an app on UTC).
 
 ## Membership lines
 
@@ -289,7 +322,7 @@ and when `broadcasting.enabled` is on they're broadcast too:
 | Channel | Events |
 | --- | --- |
 | `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted`, `.conversation.updated` |
-| `private-chat.user.{publicId}` | `.conversation.joined` |
+| `private-chat.user.{publicId}` | `.conversation.joined` (added to a chat, or a new message brought back one they had archived) |
 | `presence-chat.presence.{key}` | joining/leaving, `.presence.changed` |
 
 The package registers who may listen (members of the conversation, anyone in the tenant for a public channel, and
@@ -319,7 +352,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | POST | `{kind}/{id}/notifications` | `{ level: 'all' \| 'mentions' \| 'none', mutedUntil? }` |
 | GET | `{kind}/{id}/messages?page=` | Page 1 is the latest messages; each page lists them oldest first |
 | POST | `{kind}/{id}/messages` | `{ body, replyToId?, forwardedFromId?, attachments[]?, gif? }` (multipart with files) |
-| GET | `{kind}/{id}/files?type=&before=` | Its files, newest first: `media` (photos and videos) or `files`; `before` is the last id shown |
+| GET | `{kind}/{id}/files?type=&before=` | Its files, newest first: `media` (photos and videos the browser shows) or `files`; `before` is the last id shown |
 | POST | `{kind}/{id}/read`, `/favorite` | Mark read; `{ favorite }` |
 | POST / DELETE | `{kind}/{id}/members`, `/members/{userId}`, `/members/me` | Add `{ userId }`, remove, leave `{ successorId? }` |
 | PATCH | `{kind}/{id}/members/{userId}` | Admins: `{ role: 'admin' \| 'member' }` |
@@ -335,10 +368,17 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | GET | `threads` | Threads you follow, latest reply first: `{ message, chat, unreadCount, latestReplies }` |
 | GET | `users` | People you can start a conversation with |
 | GET | `features` | What the chat can do here: `{ data: { channels, groups, threads, … } }` (see Features) |
+| GET | `unread` | What your sidebar's badges add up to: `{ data: { chats, mentions } }` (see Unread totals) |
 | GET | `presence?ids=` | Your presence channel, and who of these people is online or away |
 | POST | `presence` | Heartbeat: `{ status: 'online' \| 'away' }` (any chat request also counts as being around) |
 
 Errors are Laravel's usual JSON: 422 with `errors` for validation, 403 or 404 for permissions.
+
+Attachments are served through their expiring links. When those are the package's own signed route (a disk without
+temporary URLs), it's your app's site, so only plain images, video and audio (`Attachment::INLINE_TYPES`) show in
+the browser; anything else, HTML, SVG and PDF included, downloads (`application/octet-stream`, `nosniff`, a sandboxing
+`Content-Security-Policy`), so a file someone uploads can never run as a page of your app. SVGs are files, not images
+(`isImage: false`).
 
 ## Development
 

@@ -12,7 +12,8 @@ trait PresentsChatDetails
 {
     protected function chatDetails(): array
     {
-        $mutedUntil = $this->viewer_muted_until ? Carbon::parse($this->viewer_muted_until) : null;
+        // The raw column, kept as UTC (Participant's UtcDatetime cast)
+        $mutedUntil = $this->viewer_muted_until ? Carbon::parse($this->viewer_muted_until, 'UTC') : null;
 
         return [
             'notifications' => $this->viewer_notifications ?? 'all',

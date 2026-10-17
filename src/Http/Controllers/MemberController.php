@@ -27,7 +27,8 @@ class MemberController extends Controller
 
     public function destroy(Request $request, Conversation $conversation, string $userId): Response
     {
-        $person = $this->findPerson($request->user(), $userId, 'userId');
+        Gate::authorize('participate', $conversation); // someone outside it learns nothing about who's in it
+        $person = $this->participant($conversation, $userId) ?? $this->findPerson($request->user(), $userId, 'userId');
         Gate::authorize('removeMember', [$conversation, $person]);
         $this->chat->removeMember($conversation, $person, by: $request->user());
 
@@ -48,7 +49,10 @@ class MemberController extends Controller
     public function update(MemberRoleRequest $request, Conversation $conversation, string $userId): Response
     {
         Gate::authorize('manageRoles', $conversation);
-        $person = $this->member($request, $conversation, $userId, 'userId');
+        // Only someone who can still use the chat becomes an admin; anyone in it can go back to being a member
+        $person = $request->input('role') === Participant::ADMIN
+            ? $this->member($request, $conversation, $userId, 'userId')
+            : $this->participant($conversation, $userId) ?? $this->member($request, $conversation, $userId, 'userId');
         Gate::authorize('manageRoles', [$conversation, $person]); // not the creator
         if ($request->input('role') === Participant::MEMBER && $this->chat->isLastAdmin($conversation, $person)) {
             throw ValidationException::withMessages(['role' => 'Make someone else an admin first.']);
@@ -58,7 +62,18 @@ class MemberController extends Controller
         return response()->noContent();
     }
 
-    // Someone in this conversation, by public id
+    /**
+     * Someone in this conversation, by public id, even when the user provider no longer finds them (an account that
+     * was disabled, or lost access to the chat): they stay a member until someone removes them.
+     */
+    private function participant(Conversation $conversation, string $publicId): ?Model
+    {
+        return $conversation->participants()->with('user')->get()
+            ->map(fn (Participant $participant) => $participant->user)
+            ->first(fn (?Model $user) => $user !== null && $this->users->publicId($user) === $publicId);
+    }
+
+    // Someone in this conversation, by public id, whom the user provider finds
     private function member(Request $request, Conversation $conversation, string $publicId, string $field): Model
     {
         $person = $this->findPerson($request->user(), $publicId, $field);

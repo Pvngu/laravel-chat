@@ -64,6 +64,76 @@ class BroadcastingTest extends TestCase
         });
     }
 
+    public function test_a_new_message_brings_an_archived_conversation_back_to_whoever_archived_it(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $direct = $this->directBetween($ann, $john);
+        Chat::setFlag($direct, $ann, 'archived', true);
+        Event::fake([ConversationJoined::class]);
+
+        // Only Ann had archived it; the chat comes back to her as she now sees it
+        Chat::send($direct, $john, 'Still there?');
+        Event::assertDispatchedTimes(ConversationJoined::class, 1);
+        Event::assertDispatched(ConversationJoined::class, fn (ConversationJoined $event) => $event->user->is($ann)
+            && $event->broadcastWith()['conversation']['lastMessage']['text'] === 'Still there?'
+            && $event->broadcastWith()['conversation']['unreadCount'] === 1);
+
+        // Nobody has it archived any more
+        Chat::send($direct, $john, 'Hello?');
+        Event::assertDispatchedTimes(ConversationJoined::class, 1);
+
+        // A reply only in a thread doesn't bring it back
+        Chat::setFlag($direct, $ann, 'archived', true);
+        Chat::send($direct, $john, 'In the thread', thread: $direct->messages()->latest('id')->first());
+        Event::assertDispatchedTimes(ConversationJoined::class, 1);
+    }
+
+    public function test_a_chat_you_join_says_which_message_its_counts_already_include(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        Event::fake([ConversationJoined::class]);
+
+        // John starts a direct message and sends its first message before the queued event is rendered
+        $direct = $this->directBetween($john, $ann);
+        $first = Chat::send($direct, $john, 'Hi Ann');
+        Event::assertDispatched(ConversationJoined::class, function (ConversationJoined $event) use ($ann, $first) {
+            $conversation = $event->broadcastWith()['conversation'];
+
+            return $event->user->is($ann)
+                && $conversation['unreadCount'] === 1
+                && $conversation['lastMessage']['id'] === (string) $first->id;
+        });
+
+        // A channel says it as lastMessageId
+        $channel = Chat::channel($john, 'general');
+        Chat::addMember($channel, $ann, by: $john);
+        $news = Chat::send($channel, $john, 'News');
+        Event::assertDispatched(ConversationJoined::class, fn (ConversationJoined $event) => $event->user->is($ann)
+            && $event->broadcastWith()['kind'] === 'channel'
+            && $event->broadcastWith()['conversation']['lastMessageId'] === (string) $news->id
+            && $event->broadcastWith()['conversation']['unreadCount'] === 1);
+    }
+
+    public function test_the_sender_also_hears_that_their_archived_chat_is_back(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $direct = $this->directBetween($ann, $john);
+        Chat::setFlag($direct, $ann, 'archived', true);
+        Event::fake([ConversationJoined::class, MessageSent::class]);
+
+        // Replying from a tab that had the archived chat open without listing it
+        $this->actingAs($ann)
+            ->postJson("/api/chat/conversations/{$direct->id}/messages", ['body' => 'Back again'], ['X-Socket-ID' => '1234.5678'])
+            ->assertCreated();
+
+        Event::assertDispatched(ConversationJoined::class, fn (ConversationJoined $event) => $event->user->is($ann) && $event->socket === null);
+        // The message itself still skips the browser that sent it
+        Event::assertDispatched(MessageSent::class, fn (MessageSent $event) => $event->socket === '1234.5678');
+    }
+
     public function test_channel_authorization(): void
     {
         $ann = $this->person('Ann Smith');

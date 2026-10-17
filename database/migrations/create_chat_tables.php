@@ -40,7 +40,7 @@ return new class extends Migration
             $table->timestamp('favorited_at')->nullable();
             $table->timestamp('archived_at')->nullable();
             $table->string('notifications', 16)->default('all'); // all | mentions | none
-            $table->timestamp('muted_until')->nullable(); // notifications paused until then
+            $table->dateTime('muted_until')->nullable(); // notifications paused until then (UTC)
             $table->timestamps();
 
             $table->unique(['conversation_id', 'user_id']);

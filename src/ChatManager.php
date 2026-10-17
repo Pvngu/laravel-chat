@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Pvngu\Chat\Casts\UtcDatetime;
 use Pvngu\Chat\Contracts\ChatPresence;
 use Pvngu\Chat\Contracts\ChatUserProvider;
 use Pvngu\Chat\Events\ConversationJoined;
@@ -254,9 +255,10 @@ class ChatManager
         $disk = config('laravel-chat.attachments.disk') ?? config('filesystems.default');
         $directory = trim((string) config('laravel-chat.attachments.directory', 'chat-attachments'), '/');
         $stored = [];
+        $unarchived = collect();
 
         try {
-            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $thread, $alsoInChat, $disk, $directory, &$stored) {
+            $message = DB::transaction(function () use ($conversation, $sender, $body, $files, $replyTo, $forwardedFrom, $gif, $thread, $alsoInChat, $disk, $directory, &$stored, &$unarchived) {
                 $participant = $this->addParticipant($conversation, $sender, notify: false);
                 // Posting in a public channel joins it
                 if ($participant->wasRecentlyCreated) {
@@ -301,7 +303,11 @@ class ChatManager
                 $conversation->forceFill(['last_message_at' => $message->created_at])->save();
                 // Your own message isn't unread for you, and a new message brings an archived chat back
                 $participant->forceFill(['last_read_message_id' => $message->id])->save();
-                $conversation->participants()->whereNotNull('archived_at')->update(['archived_at' => null]);
+                $archived = $conversation->participants()->whereNotNull('archived_at')->with('user')->get();
+                if ($archived->isNotEmpty()) {
+                    Participant::query()->whereKey($archived->modelKeys())->update(['archived_at' => null]);
+                    $unarchived = $archived->map(fn (Participant $participant) => $participant->user)->filter()->values();
+                }
 
                 return $message;
             });
@@ -312,6 +318,16 @@ class ChatManager
             throw $exception;
         }
 
+        // Back in their sidebar (it had left their lists, and their browser stopped following it), before the message.
+        // The sender's own browser too: the tab that replied had the archived chat open without listing it, so it
+        // doesn't follow it either until it hears this.
+        foreach ($unarchived as $user) {
+            $joined = new ConversationJoined($conversation, $user);
+            if ((string) $user->getKey() === (string) $sender->getKey()) {
+                $joined->socket = null;
+            }
+            event($joined);
+        }
         MessageSent::dispatch($message);
         if ($thread !== null) {
             MessageUpdated::dispatch($thread); // its reply count and last reply
@@ -420,7 +436,7 @@ class ChatManager
         $sent = 0;
         Reminder::query()
             ->whereNull('sent_at')
-            ->where('remind_at', '<=', now())
+            ->where('remind_at', '<=', now('UTC')) // kept as UTC (UtcDatetime)
             ->with(['message.conversation', 'user'])
             ->orderBy('id')
             ->each(function (Reminder $reminder) use (&$sent) {
@@ -491,6 +507,42 @@ class ChatManager
     }
 
     /**
+     * What the badges in $user's chat sidebar add up to, by vue-chat's rules (`unreadBadge`): how many chats show one
+     * (unread mentions, or unread messages in a chat they hear everything from; never a muted chat) and how many
+     * unread mentions those badges count. Like the sidebar, it leaves out archived conversations, channels they
+     * haven't joined, and channels altogether when that feature is off. One query, however many chats.
+     *
+     * @return array{chats: int, mentions: int}
+     */
+    public function unread(Model $user): array
+    {
+        $conversation = new Conversation;
+        $type = $conversation->qualifyColumn('type');
+
+        $listed = Conversation::query()
+            ->withViewerState($user)
+            ->where($conversation->qualifyColumn('tenant'), $this->users->tenant($user))
+            ->whereNotNull('viewer.id')
+            // What GET conversations lists (not archived) and what GET channels lists (archived or not)
+            ->where(fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->whereIn($type, [ConversationType::Direct->value, ConversationType::Group->value])
+                    ->whereNull('viewer.archived_at'))
+                ->when(Features::enabled('channels'), fn ($query) => $query->orWhere($type, ConversationType::Channel->value)))
+            // Muted, for good or for now: no badge at all
+            ->where('viewer.notifications', '!=', 'none')
+            ->where(fn ($query) => $query->whereNull('viewer.muted_until')->orWhere('viewer.muted_until', '<=', now('UTC')));
+
+        $totals = $conversation->getConnection()->query()
+            ->fromSub($listed, 'listed')
+            ->selectRaw("count(case when mention_count > 0 or (viewer_notifications = 'all' and unread_count > 0) then 1 end) as chats")
+            ->selectRaw('coalesce(sum(mention_count), 0) as mentions')
+            ->first();
+
+        return ['chats' => (int) $totals->chats, 'mentions' => (int) $totals->mentions];
+    }
+
+    /**
      * Change a conversation's or channel's details: `name`, `description`, and for channels `isPrivate`.
      *
      * @param  array{name?: ?string, description?: ?string, isPrivate?: bool}  $changes
@@ -520,7 +572,8 @@ class ChatManager
     {
         $conversation->participants()
             ->where('user_id', $user->getKey())
-            ->update(['notifications' => $level, 'muted_until' => $mutedUntil]);
+            // Without the model, so as its cast would: UTC
+            ->update(['notifications' => $level, 'muted_until' => $mutedUntil ? UtcDatetime::toStored($mutedUntil) : null]);
     }
 
     /**

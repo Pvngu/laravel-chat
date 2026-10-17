@@ -14,6 +14,12 @@ interface ChatUserProvider
     /** The id the browser sees for a user (e.g. a hashed id). Stable and unique. */
     public function publicId(Model $user): string;
 
+    /**
+     * The id the browser sees for someone whose account no longer exists, from their key alone (e.g. the sender of a
+     * message kept after they were deleted). The same as publicId() gave them, so the browser still recognises them.
+     */
+    public function publicIdForKey(int|string $key): string;
+
     /** The user with this public id, or null when there is none. */
     public function find(string $publicId): ?Model;
 

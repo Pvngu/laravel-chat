@@ -33,6 +33,8 @@ class ChannelResource extends JsonResource
                 ])
                 ->values(),
             'unreadCount' => (int) ($this->unread_count ?? 0),
+            // The latest message unreadCount can include: a client doesn't count it again when it also arrives live
+            'lastMessageId' => $this->last_message_id !== null ? (string) $this->last_message_id : null,
             'isMember' => $this->viewer_participant_id !== null,
             'isFavorite' => $this->viewer_favorited_at !== null,
             ...$this->chatDetails(),

@@ -37,6 +37,8 @@ class ConversationResource extends JsonResource
                 ])
                 ->values(),
             'lastMessage' => $latest ? [
+                // unreadCount includes it: a client doesn't count it again when it also arrives live
+                'id' => (string) $latest->id,
                 'text' => $latest->previewText(),
                 'sentAt' => $latest->created_at->toIso8601ZuluString(),
                 'sender' => $this->person($latest->sender, $latest->sender_id),

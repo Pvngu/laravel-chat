@@ -10,7 +10,12 @@ class HashedIdUserProvider extends DefaultChatUserProvider
 {
     public function publicId(Model $user): string
     {
-        return 'u_'.base_convert((string) ($user->getKey() * 7919), 10, 36);
+        return $this->publicIdForKey($user->getKey());
+    }
+
+    public function publicIdForKey(int|string $key): string
+    {
+        return 'u_'.base_convert((string) ((int) $key * 7919), 10, 36);
     }
 
     public function find(string $publicId): ?Model

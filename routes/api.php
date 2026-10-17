@@ -13,6 +13,7 @@ use Pvngu\Chat\Http\Controllers\ReactionController;
 use Pvngu\Chat\Http\Controllers\ReminderController;
 use Pvngu\Chat\Http\Controllers\SavedMessageController;
 use Pvngu\Chat\Http\Controllers\ThreadController;
+use Pvngu\Chat\Http\Controllers\UnreadController;
 use Pvngu\Chat\Http\Controllers\UserController;
 use Pvngu\Chat\Http\Middleware\EnsureFeatureEnabled;
 use Pvngu\Chat\Http\Middleware\RecordPresence;
@@ -32,8 +33,12 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         ->middleware(['signed', SubstituteBindings::class])
         ->name('attachments.show');
 
+    // For a badge anywhere in the app (outside the chat too), so asking isn't being around in the chat
+    $auth = config('laravel-chat.routes.middleware', ['api', 'auth:sanctum']);
+    Route::get('unread', [UnreadController::class, 'show'])->middleware($auth)->name('unread');
+
     // Every request counts as being online, for `@here`
-    $middleware = [...config('laravel-chat.routes.middleware', ['api', 'auth:sanctum']), SubstituteBindings::class, RecordPresence::class];
+    $middleware = [...$auth, SubstituteBindings::class, RecordPresence::class];
     Route::middleware($middleware)->group(function () use ($feature) {
         Route::get('features', [FeatureController::class, 'index'])->name('features.index');
 

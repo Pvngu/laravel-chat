@@ -45,6 +45,10 @@ class ConversationController extends Controller
         $conversation = $request->boolean('isDirect') && $people->count() === 1
             ? $this->chat->direct($user, $people->first())
             : $this->chat->group($user, $people, $request->input('name'));
+        // A direct message they already had, maybe archived: starting it again brings it back to their sidebar
+        if (! $conversation->wasRecentlyCreated) {
+            $this->chat->setFlag($conversation, $user, 'archived', false);
+        }
 
         return (new ConversationResource($this->forViewer($user, $conversation->id)))
             ->response()

@@ -22,6 +22,32 @@ First version.
   reminders, reactions, replies, forwarding, editing, deleting, pinning, mentions, attachments, gifs, formatting,
   files, presence, notifications); their routes answer 404 and their fields are refused. `GET features` lists them for
   the frontend; `Features::enabled()` in code.
+- Attachments served by the package's signed route only show in the browser when they're plain images, video or audio
+  (`Attachment::INLINE_TYPES`); everything else (HTML, SVG, XML, PDF…) downloads as `application/octet-stream` with
+  `nosniff` and a sandboxing `Content-Security-Policy`. SVGs are files, not images (`isImage`), and stay out of the
+  Files tab's media.
+- `ChatUserProvider::publicIdForKey()`: the public id of someone whose account was deleted, from their key alone, so
+  their kept messages, reactions and mentions never show the raw key (`DefaultChatUserProvider` returns the key).
+- Admins remove, or make members again, people still in their chat whom the provider's `find()` no longer returns
+  (e.g. a disabled account); only people it finds can be made admins.
+- `remindAt` and `mutedUntil` are stored as UTC in `DATETIME` columns (`Casts\UtcDatetime`) and read back on the
+  app's clock, so reminders and mutes end when chosen in apps whose `app.timezone` isn't UTC, the night the clocks go
+  back included. Apps that published the migrations earlier: change `remind_at` and `muted_until` to `dateTime` and
+  convert their values to UTC (nothing to do in an app on UTC).
+- `lastMessage.id` on conversations and `lastMessageId` on channels: the latest message `unreadCount` can include, so
+  a client doesn't count a message twice when a chat is described after it was sent (`ConversationJoined`) and its
+  `.message.sent` arrives too.
+- A mention in a thread reply counts in its thread, not in the chat's `mentionCount` (nor `GET unread`), unless the
+  reply was sent to the chat too, as `unreadCount` already did.
+- Starting a direct message you already have (`POST conversations`) brings it back to your sidebar if you had
+  archived it.
+- A new message that brings back a conversation someone had archived tells them with `ConversationJoined`, so their
+  sidebar shows it again and their browser follows it again; that includes the sender's own browser, when they're the
+  one who had archived it.
+- Unread totals: `GET unread` (`chat.unread`, `Chat::unread()`) gives `{ chats, mentions }`, what the signed-in
+  person's sidebar badges add up to by vue-chat's rules (muted chats show nothing, mentions always count, other unread
+  messages only in chats set to `all`; archived conversations and channels they haven't joined left out), in one
+  query, for a badge outside the chat. Asking doesn't count as being online.
 - Formatting: messages keep vue-chat's formatting markers (bold, italic, underline, strikethrough, code, links,
   quotes, lists, code blocks); previews, reply quotes and `displayText()` read without them (`Formatting::plain()`).
 - Membership lines: joining, leaving, adding and removing people post a line in the chat (`event` on messages,

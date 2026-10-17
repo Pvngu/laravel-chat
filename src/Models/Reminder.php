@@ -5,6 +5,7 @@ namespace Pvngu\Chat\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Pvngu\Chat\Casts\UtcDatetime;
 use Pvngu\Chat\Support\ChatConfig;
 
 /**
@@ -21,7 +22,7 @@ class Reminder extends ChatModel
     protected string $baseTable = 'reminders';
 
     protected $casts = [
-        'remind_at' => 'datetime',
+        'remind_at' => UtcDatetime::class, // UTC in the database
         'sent_at' => 'datetime',
     ];
 

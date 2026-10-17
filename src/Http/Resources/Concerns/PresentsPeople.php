@@ -12,11 +12,17 @@ trait PresentsPeople
     {
         return $user
             ? app(ChatUserProvider::class)->present($user)
-            : ['id' => (string) $key, 'name' => '', 'email' => null, 'avatarUrl' => null];
+            : ['id' => $this->missingPersonId($key), 'name' => '', 'email' => null, 'avatarUrl' => null];
     }
 
     protected function personId(?Model $user, int|string|null $key): string
     {
-        return $user ? app(ChatUserProvider::class)->publicId($user) : (string) $key;
+        return $user ? app(ChatUserProvider::class)->publicId($user) : $this->missingPersonId($key);
+    }
+
+    // Still their public id, never the database key (which an app may keep from the browser)
+    private function missingPersonId(int|string|null $key): string
+    {
+        return $key === null || $key === '' ? '' : app(ChatUserProvider::class)->publicIdForKey($key);
     }
 }

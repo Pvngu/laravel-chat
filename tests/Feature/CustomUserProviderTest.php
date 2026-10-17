@@ -8,6 +8,7 @@ use Pvngu\Chat\Events\ConversationJoined;
 use Pvngu\Chat\Facades\Chat;
 use Pvngu\Chat\Tests\Fixtures\HashedIdUserProvider;
 use Pvngu\Chat\Tests\TestCase;
+use Pvngu\Chat\Users\DefaultChatUserProvider;
 
 class CustomUserProviderTest extends TestCase
 {
@@ -41,6 +42,39 @@ class CustomUserProviderTest extends TestCase
         $this->actingAs($ann)
             ->postJson('/api/chat/conversations', ['participantIds' => [(string) $john->id], 'isDirect' => true])
             ->assertJsonValidationErrors('participantIds');
+    }
+
+    public function test_people_whose_accounts_are_gone_keep_their_public_id(): void
+    {
+        $ann = $this->person('Ann Smith');
+        $john = $this->person('John Doe');
+        $sara = $this->person('Sara Lane');
+        $users = app(ChatUserProvider::class);
+        [$johnId, $saraId] = [$users->publicId($john), $users->publicId($sara)];
+        $group = Chat::group($ann, [$john, $sara], 'Team');
+        $message = Chat::send($group, $john, "Hi <@$saraId>");
+        Chat::react($message, $sara, '👍');
+        Chat::removeMember($group, $sara, by: $ann);
+        [$johnKey, $saraKey] = [(string) $john->getKey(), (string) $sara->getKey()];
+
+        // Their messages, reactions and mentions stay; their accounts don't
+        $john->delete();
+        $sara->delete();
+
+        $messages = collect($this->actingAs($ann)->getJson("/api/chat/conversations/{$group->id}/messages")->assertOk()->json('data'));
+        $sent = $messages->firstWhere('id', (string) $message->id);
+        $this->assertSame($johnId, $sent['senderId']);
+        $this->assertSame([$saraId], $sent['reactions'][0]['participantIds']);
+        $this->assertSame([['id' => $saraId, 'name' => '']], $sent['mentions']);
+        $this->assertSame($saraId, $messages->firstWhere('event.type', 'removed')['event']['user']['id']);
+        $this->actingAs($ann)->getJson("/api/chat/conversations/{$group->id}")
+            ->assertJsonPath('data.participants.*.id', [$users->publicId($ann), $johnId])
+            ->assertJsonPath('data.participants.1.name', '');
+
+        // Never the database key; an app showing its keys keeps showing them
+        $this->assertNotContains($johnKey, [$sent['senderId'], ...$sent['reactions'][0]['participantIds']]);
+        $this->assertNotContains($saraKey, [$sent['senderId'], ...$sent['reactions'][0]['participantIds']]);
+        $this->assertSame('42', (new DefaultChatUserProvider)->publicIdForKey(42));
     }
 
     public function test_user_channels_are_named_by_public_id(): void

@@ -22,7 +22,7 @@ class ReminderController extends Controller
         $reminders = Reminder::query()
             ->where('user_id', $request->user()->getKey())
             ->whereNull('sent_at')
-            ->where('remind_at', '>', now())
+            ->where('remind_at', '>', now('UTC')) // kept as UTC (UtcDatetime)
             ->whereHas('message', fn ($query) => $query->withoutTrashed())
             ->with('message.conversation')
             ->orderBy('remind_at')

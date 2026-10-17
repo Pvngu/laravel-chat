@@ -21,7 +21,7 @@ return new class extends Migration
                 'string' => $table->string('user_id'),
                 default => $table->unsignedBigInteger('user_id'),
             };
-            $table->timestamp('remind_at');
+            $table->dateTime('remind_at'); // UTC, whatever the app's timezone (a timestamp would move with MySQL's)
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 

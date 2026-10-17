@@ -24,6 +24,7 @@ use Pvngu\Chat\Support\ChatConfig;
  * @property int|string|null $created_by
  * @property Carbon|null $last_message_at
  * @property int|null $unread_count Set by withViewerState()
+ * @property int|null $last_message_id Set by withViewerState()
  * @property int|null $viewer_participant_id Set by withViewerState()
  */
 class Conversation extends ChatModel
@@ -103,7 +104,8 @@ class Conversation extends ChatModel
 
     /**
      * Adds what $user sees of each conversation: their participation (viewer_* columns, null when they aren't a
-     * member, e.g. in a public channel) and how many messages they haven't read (unread_count).
+     * member, e.g. in a public channel), how many messages they haven't read (unread_count) and how many of those
+     * mention them (mention_count), and the latest message those counts can include (last_message_id).
      */
     public function scopeWithViewerState(Builder $query, Model $user): void
     {
@@ -139,6 +141,15 @@ class Conversation extends ChatModel
                     ->whereNull("$messages.deleted_at")
                     ->where(fn ($q) => $q->whereNull("$messages.sender_id")->orWhere("$messages.sender_id", '!=', $userKey));
             }, 'unread_count')
+            // The latest message unread_count can include: clients don't count it again when it also arrives live
+            ->selectSub(function (QueryBuilder $latest) use ($messages, $conversations) {
+                $latest->from($messages)
+                    ->selectRaw('max(id)')
+                    ->whereColumn("$messages.conversation_id", "$conversations.id")
+                    ->whereNull("$messages.event")
+                    ->where(fn ($q) => $q->whereNull("$messages.thread_id")->orWhere("$messages.also_in_chat", true))
+                    ->whereNull("$messages.deleted_at");
+            }, 'last_message_id')
             // Unread messages that mention the viewer (someone else's)
             ->selectSub(function (QueryBuilder $mentioned) use ($mentions, $messages, $conversations, $userKey) {
                 $mentioned->from($mentions)
@@ -147,6 +158,8 @@ class Conversation extends ChatModel
                     ->whereColumn("$mentions.conversation_id", "$conversations.id")
                     ->where("$mentions.user_id", '=', $userKey)
                     ->whereNotNull('viewer.id')
+                    // Like unread_count: a reply only in its thread counts there (the thread's unread), not in the chat
+                    ->where(fn ($q) => $q->whereNull("$messages.thread_id")->orWhere("$messages.also_in_chat", true))
                     ->whereRaw("$mentions.message_id > coalesce(viewer.last_read_message_id, 0)")
                     ->whereNull("$messages.deleted_at")
                     ->where(fn ($q) => $q->whereNull("$messages.sender_id")->orWhere("$messages.sender_id", '!=', $userKey));

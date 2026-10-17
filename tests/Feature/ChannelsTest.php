@@ -15,7 +15,7 @@ class ChannelsTest extends TestCase
         $design = Chat::channel($ann, 'design', isPrivate: true);      // private, Ann's
         Chat::channel($john, 'secret', isPrivate: true);               // private, not Ann's
         Chat::channel($this->person('Olga', 'globex'), 'globex-news'); // another tenant
-        Chat::send($general, $john, 'Welcome');
+        $welcome = Chat::send($general, $john, 'Welcome');
 
         $response = $this->actingAs($ann)->getJson('/api/chat/channels')->assertOk();
 
@@ -27,6 +27,7 @@ class ChannelsTest extends TestCase
             'description' => null,
             'members' => [['id' => (string) $ann->id, 'name' => 'Ann Smith', 'email' => 'ann.smith@example.com', 'avatarUrl' => null, 'role' => 'admin']],
             'unreadCount' => 0,
+            'lastMessageId' => null,
             'isMember' => true,
             'isFavorite' => false,
             'notifications' => 'all',
@@ -38,6 +39,8 @@ class ChannelsTest extends TestCase
         ]);
         // Not a member yet: nothing counts as unread
         $response->assertJsonPath('data.1.isMember', false)->assertJsonPath('data.1.unreadCount', 0);
+        // The latest message a client may find counted already
+        $response->assertJsonPath('data.1.lastMessageId', (string) $welcome->id);
     }
 
     public function test_it_creates_channels_with_names_unique_per_tenant(): void

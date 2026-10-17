@@ -4,6 +4,7 @@ namespace Pvngu\Chat\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Pvngu\Chat\Casts\UtcDatetime;
 use Pvngu\Chat\Support\ChatConfig;
 
 /**
@@ -25,7 +26,7 @@ class Participant extends ChatModel
             'pinned_at' => 'datetime',
             'favorited_at' => 'datetime',
             'archived_at' => 'datetime',
-            'muted_until' => 'datetime',
+            'muted_until' => UtcDatetime::class, // UTC in the database
         ];
     }
 

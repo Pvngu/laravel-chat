@@ -39,6 +39,7 @@ class UuidUsersTest extends TestCase
             ->assertJsonPath('data.0.id', $conversationId)
             ->assertJsonPath('data.0.unreadCount', 1)
             ->assertJsonPath('data.0.lastMessage.sender.id', $john->id);
+        $this->actingAs($ann)->getJson('/api/chat/unread')->assertJsonPath('data', ['chats' => 1, 'mentions' => 0]);
         $this->actingAs($ann)->getJson("/api/chat/conversations/$conversationId/messages")
             ->assertJsonPath('data.0.senderId', $john->id);
     }

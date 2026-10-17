@@ -10,7 +10,8 @@ use Pvngu\Chat\Http\Resources\ConversationResource;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Support\ChatConfig;
 
-// Someone was added to a conversation or channel (or one was started with them): it appears in their sidebar
+// Someone was added to a conversation or channel (or one was started with them), or a new message brought back a
+// conversation they had archived: it appears in their sidebar
 class ConversationJoined extends ChatEvent
 {
     public function __construct(public Conversation $conversation, public Model $user)
