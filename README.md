@@ -125,6 +125,8 @@ use Pvngu\Chat\Facades\Chat;
 
 $conversation = Chat::direct($user, $otherUser);            // the existing one, or a new one
 $group = Chat::group($user, [$ann, $john], 'Launch');
+[$conversation, $message] = Chat::start($user, [$john], direct: true, name: null, body: 'Hi John'); // saved together
+Chat::findDirect($user, $john);                               // their direct message, or null; changes nothing
 $channel = Chat::channel($user, 'announcements');
 
 Chat::send($channel, $bot, 'Deploy finished ✅');            // also accepts UploadedFile[] attachments
@@ -322,12 +324,13 @@ and when `broadcasting.enabled` is on they're broadcast too:
 | Channel | Events |
 | --- | --- |
 | `private-chat.conversation.{id}` | `.message.sent`, `.message.updated`, `.message.deleted`, `.conversation.updated` |
-| `private-chat.user.{publicId}` | `.conversation.joined` (added to a chat, or a new message brought back one they had archived) |
+| `private-chat.user.{publicId}` | `.conversation.joined` (added to a chat, a conversation started with them (with its first message in it), or a new message brought back one they had archived) |
 | `presence-chat.presence.{key}` | joining/leaving, `.presence.changed` |
 
 The package registers who may listen (members of the conversation, anyone in the tenant for a public channel, and
 each person on their own user channel). Your app needs broadcasting set up (`php artisan install:broadcasting`) so the
-channel authorization route exists. Pass Echo's socket id to the adapter (as above) so your own changes aren't echoed
+channel authorization route exists. A conversation started with its first message (`POST conversations` with a
+`body`, `Chat::start()`) also reaches the starter's other tabs and devices. Pass Echo's socket id to the adapter (as above) so your own changes aren't echoed
 back to you.
 
 ## Changing the rules
@@ -344,7 +347,8 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 | Method | Path | |
 | --- | --- | --- |
 | GET | `conversations?page=` | Your direct and group conversations, latest activity first |
-| POST | `conversations` | `{ participantIds, isDirect, name? }`; returns the existing direct message when there is one |
+| GET | `conversations/lookup?participantIds[]=&isDirect=&name=` | What these people already have: their direct message (archived too), or `data: null` (a group is always new). Validates like `POST conversations` (422 for someone you can't message) and changes nothing |
+| POST | `conversations` | `{ participantIds, isDirect, name? }`, optionally with a first message `{ body, attachments[], gif }` (multipart with files): both are saved together and the response is `{ data, firstMessage, created }` (201 new, 200 the existing direct message, which gets the message). Without a message it returns the existing direct message when there is one |
 | POST | `conversations/{id}/pin`, `/archive` | `{ pinned }`, `{ archived }` |
 | GET / POST | `channels` | Your channels plus the public ones; create `{ name, isPrivate, description? }` |
 | GET | `{kind}/{id}` | One conversation or channel |

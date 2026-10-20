@@ -43,6 +43,7 @@ Route::prefix($prefix)->name($name)->where($ids)->group(function () {
         Route::get('features', [FeatureController::class, 'index'])->name('features.index');
 
         Route::get('conversations', [ConversationController::class, 'index'])->name('conversations.index');
+        Route::get('conversations/lookup', [ConversationController::class, 'lookup'])->name('conversations.lookup');
         Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');
         Route::post('conversations/{conversation}/pin', [ConversationController::class, 'pin'])->name('conversations.pin');
         Route::post('conversations/{conversation}/archive', [ConversationController::class, 'archive'])->name('conversations.archive');

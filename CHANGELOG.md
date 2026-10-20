@@ -41,6 +41,12 @@ First version.
   reply was sent to the chat too, as `unreadCount` already did.
 - Starting a direct message you already have (`POST conversations`) brings it back to your sidebar if you had
   archived it.
+- Start a conversation with its first message: `POST conversations` takes an optional `body`, `attachments[]` or
+  `gif`, saved in one transaction (`Chat::start()`); everyone else hears about it once, with the message already in
+  it, and the starter's other tabs and devices hear about a new one.
+- `GET conversations/lookup` and `Chat::findDirect()`: the direct message two people already have, without starting
+  or un-archiving it.
+- Two people starting the same direct message at the same moment inside a transaction no longer fails.
 - A new message that brings back a conversation someone had archived tells them with `ConversationJoined`, so their
   sidebar shows it again and their browser follows it again; that includes the sender's own browser, when they're the
   one who had archived it.

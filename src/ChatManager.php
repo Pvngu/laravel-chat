@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat;
 
+use Closure;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -60,16 +61,12 @@ class ChatManager
     /** The direct conversation between two people, started when they don't have one yet. */
     public function direct(Model $user, Model $other): Conversation
     {
-        $tenant = $this->users->tenant($user);
-        $keys = [(string) $user->getKey(), (string) $other->getKey()];
-        sort($keys, SORT_STRING);
-        $directKey = implode(':', $keys);
-
-        $find = fn () => Conversation::query()->where('tenant', $tenant)->where('direct_key', $directKey)->first();
-
-        if ($existing = $find()) {
+        if ($existing = $this->findDirect($user, $other)) {
             return $existing;
         }
+
+        $tenant = $this->users->tenant($user);
+        $directKey = $this->directKey($user, $other);
 
         try {
             return DB::transaction(function () use ($user, $other, $tenant, $directKey) {
@@ -85,10 +82,29 @@ class ChatManager
 
                 return $conversation;
             });
-        } catch (UniqueConstraintViolationException) {
-            // The other person started it at the same moment
-            return $find();
+        } catch (UniqueConstraintViolationException $exception) {
+            // The other person started it at the same moment. Inside an outer transaction (start()) a repeatable-read
+            // snapshot (MySQL) may not show their row yet: rethrown, so start() runs again in a new transaction
+            return $this->findDirect($user, $other) ?? throw $exception;
         }
+    }
+
+    /** The direct conversation between two people (archived or not), without starting one. */
+    public function findDirect(Model $user, Model $other): ?Conversation
+    {
+        return Conversation::query()
+            ->where('tenant', $this->users->tenant($user))
+            ->where('direct_key', $this->directKey($user, $other))
+            ->first();
+    }
+
+    // The same for both people: their keys, sorted
+    private function directKey(Model $user, Model $other): string
+    {
+        $keys = [(string) $user->getKey(), (string) $other->getKey()];
+        sort($keys, SORT_STRING);
+
+        return implode(':', $keys);
     }
 
     /** @param iterable<Model> $members */
@@ -109,6 +125,50 @@ class ChatManager
 
             return $conversation;
         });
+    }
+
+    /**
+     * A conversation started with its first message, saved together: the direct message between $sender and one person
+     * (the one they have, if any, which gets the message) or a new group. Everyone else hears about it once, with the
+     * message already in it (ConversationJoined, then MessageSent, after the commit), and so do $sender's other tabs
+     * and devices when it's new. $authorize runs before anything is stored; throwing there undoes it all.
+     *
+     * @param  iterable<Model>  $people  everyone but $sender
+     * @param  array<int, UploadedFile>  $files
+     * @param  (Closure(Conversation): void)|null  $authorize
+     * @return array{0: Conversation, 1: Message}
+     */
+    public function start(
+        Model $sender,
+        iterable $people,
+        bool $direct,
+        ?string $name,
+        string $body,
+        array $files = [],
+        ?array $gif = null,
+        ?Closure $authorize = null,
+    ): array {
+        $people = collect($people)->values();
+        $attempt = fn () => DB::transaction(function () use ($sender, $people, $direct, $name, $body, $files, $gif, $authorize) {
+            $conversation = $direct && $people->count() === 1
+                ? $this->direct($sender, $people->first())
+                : $this->group($sender, $people, $name);
+            if ($authorize) {
+                $authorize($conversation);
+            }
+            // Your other tabs and devices (the one sending it is skipped through X-Socket-ID)
+            if ($conversation->wasRecentlyCreated) {
+                event(new ConversationJoined($conversation, $sender));
+            }
+
+            return [$conversation, $this->send($conversation, $sender, $body, $files, gif: $gif)];
+        });
+
+        try {
+            return $attempt();
+        } catch (UniqueConstraintViolationException) {
+            return $attempt(); // they started the same direct message at the same moment: it gets the message
+        }
     }
 
     public function channel(Model $creator, string $name, bool $isPrivate = false, ?string $description = null): Conversation

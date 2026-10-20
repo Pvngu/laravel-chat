@@ -7,7 +7,9 @@ use Pvngu\Chat\ChatManager;
 
 /**
  * @method static \Pvngu\Chat\Models\Conversation direct(\Illuminate\Database\Eloquent\Model $user, \Illuminate\Database\Eloquent\Model $other)
+ * @method static \Pvngu\Chat\Models\Conversation|null findDirect(\Illuminate\Database\Eloquent\Model $user, \Illuminate\Database\Eloquent\Model $other)
  * @method static \Pvngu\Chat\Models\Conversation group(\Illuminate\Database\Eloquent\Model $creator, iterable $members, ?string $name = null)
+ * @method static array{0: \Pvngu\Chat\Models\Conversation, 1: \Pvngu\Chat\Models\Message} start(\Illuminate\Database\Eloquent\Model $sender, iterable $people, bool $direct, ?string $name, string $body, array $files = [], ?array $gif = null, ?\Closure $authorize = null)
  * @method static \Pvngu\Chat\Models\Conversation channel(\Illuminate\Database\Eloquent\Model $creator, string $name, bool $isPrivate = false, ?string $description = null)
  * @method static \Pvngu\Chat\Models\Message send(\Pvngu\Chat\Models\Conversation $conversation, \Illuminate\Database\Eloquent\Model $sender, string $body, array $files = [], ?\Pvngu\Chat\Models\Message $replyTo = null, ?\Pvngu\Chat\Models\Message $forwardedFrom = null, ?array $gif = null, ?\Pvngu\Chat\Models\Message $thread = null)
  * @method static \Pvngu\Chat\Models\ThreadFollower followThread(\Pvngu\Chat\Models\Message $thread, int|string $userKey, ?int $readUpTo = null)

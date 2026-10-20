@@ -2,17 +2,24 @@
 
 namespace Pvngu\Chat\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Pvngu\Chat\Http\Requests\LookupConversationRequest;
 use Pvngu\Chat\Http\Requests\NotificationsRequest;
 use Pvngu\Chat\Http\Requests\StoreConversationRequest;
 use Pvngu\Chat\Http\Requests\UpdateConversationRequest;
 use Pvngu\Chat\Http\Resources\ChannelResource;
 use Pvngu\Chat\Http\Resources\ConversationResource;
+use Pvngu\Chat\Http\Resources\MessageResource;
 use Pvngu\Chat\Models\Conversation;
+use Pvngu\Chat\Models\Message;
 
 class ConversationController extends Controller
 {
@@ -34,15 +41,18 @@ class ConversationController extends Controller
         return ConversationResource::collection($conversations);
     }
 
-    // A direct message (the existing one when there is one) or a group conversation
+    // A direct message (the existing one when there is one) or a group conversation. With a first message (body,
+    // attachments or gif) both are saved together.
     public function store(StoreConversationRequest $request)
     {
         $user = $request->user();
-        $people = collect($request->input('participantIds'))
-            ->unique()
-            ->map(fn (string $id) => $this->findPerson($user, $id, 'participantIds'));
+        $people = $this->people($request, $user);
+        $direct = $request->boolean('isDirect') && $people->count() === 1;
+        if ($request->hasFirstMessage()) {
+            return $this->startWithMessage($request, $user, $people, $direct);
+        }
 
-        $conversation = $request->boolean('isDirect') && $people->count() === 1
+        $conversation = $direct
             ? $this->chat->direct($user, $people->first())
             : $this->chat->group($user, $people, $request->input('name'));
         // A direct message they already had, maybe archived: starting it again brings it back to their sidebar
@@ -53,6 +63,22 @@ class ConversationController extends Controller
         return (new ConversationResource($this->forViewer($user, $conversation->id)))
             ->response()
             ->setStatusCode($conversation->wasRecentlyCreated ? 201 : 200);
+    }
+
+    // What these people already have: their direct message (archived too) as you see it, or data: null. Changes nothing.
+    public function lookup(LookupConversationRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $people = $this->people($request, $user);
+        $conversation = $request->boolean('isDirect') && $people->count() === 1
+            ? $this->chat->findDirect($user, $people->first())
+            : null; // a group is new every time
+        if (! $conversation) {
+            return response()->json(['data' => null]);
+        }
+        Gate::authorize('view', $conversation);
+
+        return (new ConversationResource($this->forViewer($user, $conversation->id)))->response();
     }
 
     public function read(Request $request, Conversation $conversation): Response
@@ -114,5 +140,46 @@ class ConversationController extends Controller
         $this->chat->setFlag($conversation, $request->user(), $flag, $on);
 
         return response()->noContent();
+    }
+
+    /** @param Collection<int, Model> $people */
+    private function startWithMessage(StoreConversationRequest $request, Model $user, Collection $people, bool $direct): JsonResponse
+    {
+        $body = (string) $request->input('body', '');
+        $files = $request->file('attachments', []);
+        $gif = $request->validated('gif');
+        if ($body === '' && $files === [] && $gif === null) {
+            throw ValidationException::withMessages(['body' => 'The message is empty.']);
+        }
+
+        [$conversation, $message] = $this->chat->start(
+            $user,
+            $people,
+            $direct,
+            $request->input('name'),
+            $body,
+            $files,
+            $gif,
+            // Your policy decides (host overrides too), before anything is stored
+            authorize: fn (Conversation $conversation) => Gate::authorize('send', $conversation),
+        );
+
+        return (new ConversationResource($this->forViewer($user, $conversation->id)))
+            ->additional([
+                'firstMessage' => (new MessageResource($message->load(Message::presentationRelations())))->resolve($request),
+                'created' => $conversation->wasRecentlyCreated,
+            ])
+            ->response()
+            ->setStatusCode($conversation->wasRecentlyCreated ? 201 : 200);
+    }
+
+    // The people picked, each one someone you may message (or a 422 on participantIds)
+    /** @return Collection<int, Model> */
+    private function people(Request $request, Model $user): Collection
+    {
+        return collect($request->input('participantIds'))
+            ->unique()
+            ->values()
+            ->map(fn (string $id) => $this->findPerson($user, $id, 'participantIds'));
     }
 }
