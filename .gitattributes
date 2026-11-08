@@ -1,0 +1,7 @@
+# Left out of the package archive Composer installs (`--prefer-dist`): development files only
+/.github export-ignore
+/tests export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/phpunit.xml.dist export-ignore
+/pint.json export-ignore

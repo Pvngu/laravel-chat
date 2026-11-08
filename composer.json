@@ -12,6 +12,16 @@
         "reverb",
         "vue"
     ],
+    "homepage": "https://github.com/Pvngu/laravel-chat",
+    "authors": [
+        {
+            "name": "Pvngu"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/Pvngu/laravel-chat/issues",
+        "source": "https://github.com/Pvngu/laravel-chat"
+    },
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0|^13.0"
