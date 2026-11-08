@@ -2,6 +2,7 @@
 
 namespace Pvngu\Chat\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
+use Pvngu\Chat\Contracts\SearchesChatUsers;
 use Pvngu\Chat\Http\Requests\LookupConversationRequest;
 use Pvngu\Chat\Http\Requests\NotificationsRequest;
 use Pvngu\Chat\Http\Requests\StoreConversationRequest;
@@ -20,10 +22,12 @@ use Pvngu\Chat\Http\Resources\ConversationResource;
 use Pvngu\Chat\Http\Resources\MessageResource;
 use Pvngu\Chat\Models\Conversation;
 use Pvngu\Chat\Models\Message;
+use Pvngu\Chat\Support\Like;
 
 class ConversationController extends Controller
 {
-    // The viewer's direct and group conversations, latest activity first (archived ones left out)
+    // The viewer's direct and group conversations, latest activity first (archived ones left out); `search` keeps the
+    // ones whose name, or someone else in them, matches what was typed
     public function index(Request $request): AnonymousResourceCollection
     {
         $user = $request->user();
@@ -32,6 +36,7 @@ class ConversationController extends Controller
         $conversations = Conversation::query()
             ->conversationsOf($user, $this->users->tenant($user))
             ->whereNull('viewer.archived_at')
+            ->when($this->searchTerm($request), fn (Builder $query, string $term) => $this->whereMatches($query, $user, $term))
             ->with(Conversation::presentationRelations())
             ->orderByRaw("coalesce($table.last_message_at, $table.created_at) desc")
             ->orderByDesc("$table.id")
@@ -39,6 +44,27 @@ class ConversationController extends Controller
             ->withQueryString();
 
         return ConversationResource::collection($conversations);
+    }
+
+    private function searchTerm(Request $request): ?string
+    {
+        $term = trim(mb_substr((string) $request->query('search', ''), 0, 100));
+
+        return $term === '' ? null : $term;
+    }
+
+    // Its name, or the name of someone else in it (you're in all of them), through the user provider when it can search
+    private function whereMatches(Builder $conversations, Model $user, string $term): void
+    {
+        $conversations->where(function (Builder $query) use ($user, $term) {
+            Like::contains($query->getQuery(), $query->qualifyColumn('name'), $term);
+
+            if ($this->users instanceof SearchesChatUsers) {
+                $query->orWhereHas('participants', fn (Builder $participants) => $participants
+                    ->where('user_id', '!=', $user->getKey())
+                    ->whereHas('user', fn (Builder $people) => $this->users->whereNameContains($people, $term)));
+            }
+        });
     }
 
     // A direct message (the existing one when there is one) or a group conversation. With a first message (body,

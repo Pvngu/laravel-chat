@@ -3,6 +3,14 @@
 All notable changes to `pvngu/laravel-chat` are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-08
+
+### Added
+
+- `GET conversations?search=`: only the conversations whose name, or someone else in them, contains what was typed
+  (any case, `%` and `_` literal). Searching by people goes through the new optional `SearchesChatUsers` contract,
+  which the default user provider implements for the `user_attributes.name` column.
+
 ## [0.1.0] - 2026-11-08
 
 First version.

@@ -116,6 +116,10 @@ name); with hashed ids, override it too, or the browser gets the raw key. `find(
 or messaged; people already in one stay there (listed, and removable or demoted by its admins) even when it no longer
 finds them, e.g. a disabled account, until they're removed.
 
+Searching conversations by the people in them uses the optional `Pvngu\Chat\Contracts\SearchesChatUsers`
+(`whereNameContains()`). The default provider implements it for the `user_attributes.name` column; if your name is
+computed (an accessor), override it to search your own columns, or conversations are only found by their name.
+
 ## Using it from code
 
 The `Chat` facade does everything the API does, without permission checks:
@@ -346,7 +350,7 @@ All under `/api/chat` (configurable). Lists are Laravel resource collections; pa
 
 | Method | Path | |
 | --- | --- | --- |
-| GET | `conversations?page=` | Your direct and group conversations, latest activity first |
+| GET | `conversations?page=&search=` | Your direct and group conversations, latest activity first. `search` keeps the ones whose name, or someone else in them, contains it (any case); vue-chat's sidebar sends it with `conversationSearch="remote"` |
 | GET | `conversations/lookup?participantIds[]=&isDirect=&name=` | What these people already have: their direct message (archived too), or `data: null` (a group is always new). Validates like `POST conversations` (422 for someone you can't message) and changes nothing |
 | POST | `conversations` | `{ participantIds, isDirect, name? }`, optionally with a first message `{ body, attachments[], gif }` (multipart with files): both are saved together and the response is `{ data, firstMessage, created }` (201 new, 200 the existing direct message, which gets the message). Without a message it returns the existing direct message when there is one |
 | POST | `conversations/{id}/pin`, `/archive` | `{ pinned }`, `{ archived }` |
